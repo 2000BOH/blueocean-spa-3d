@@ -255,13 +255,11 @@
   <div class="cap" id="lbCap"></div>
   <div class="lb-save">
     <span class="lb-grp"><b>이곳에 모든사진</b>
-      <button class="btn" data-scope="all" data-mode="loc">위치만</button>
-      <button class="btn" data-scope="all" data-mode="full">위치내용</button>
+      <button class="btn" data-scope="all" data-mode="loc">분류위치</button>
       <button class="btn" data-scope="all" data-mode="plain">사진만</button>
     </span>
     <span class="lb-grp"><b>현재사진</b>
-      <button class="btn" data-scope="cur" data-mode="loc">위치만</button>
-      <button class="btn" data-scope="cur" data-mode="full">위치내용</button>
+      <button class="btn" data-scope="cur" data-mode="loc">분류위치</button>
       <button class="btn" data-scope="cur" data-mode="plain">사진만</button>
     </span>
   </div>
@@ -871,7 +869,6 @@ function makeFname(m){
   if(m.chk)parts.push(m.chk);
   if(m.cat)parts.push(m.cat);
   if(m.title)parts.push(m.title);
-  if(m.memo)parts.push((m.memo+'').replace(/\s+/g,'').slice(0,10));
   return (parts.join('_')||'사진').replace(/[\\/:*?"<>|]/g,'');
 }
 function saveOne(idx,mode){
@@ -880,8 +877,7 @@ function saveOne(idx,mode){
   if(mode==='plain'){dlDataUrl(src,nm+'.jpg');return Promise.resolve();}
   return new Promise(res=>{const img=new Image();img.onload=()=>{const cv=document.createElement('canvas');cv.width=img.naturalWidth;cv.height=img.naturalHeight;
     const x=cv.getContext('2d');x.drawImage(img,0,0);
-    const meta=mode==='loc'?{cat:m.cat,title:m.title}:m;
-    drawCaptionBL(x,cv.width,cv.height,meta);dlDataUrl(cv.toDataURL('image/jpeg',0.92),nm+'.jpg');res();};img.src=src;});
+    drawCaptionBL(x,cv.width,cv.height,{cat:m.cat,title:m.title});dlDataUrl(cv.toDataURL('image/jpeg',0.92),nm+'.jpg');res();};img.src=src;});
 }
 document.querySelector('.lb-save').onclick=async e=>{
   const b=e.target.closest('[data-scope]');if(!b)return;
