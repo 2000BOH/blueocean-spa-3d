@@ -683,15 +683,28 @@ if(IS_VIEWER){
 
 function clearPinObjs(){pinObjs.forEach(o=>{o.obj.parent&&o.obj.parent.remove(o.obj);});pinObjs.length=0;}
 function isCheck(p){return p.type!=='opinion';}
-// 번호 규칙: 체크=1..N / 부착 의견=부모 체크번호(+) / 자유 의견=마지막번호+1(+)
+// 번호 규칙: 분류순번-분류내순번 (분류 배열 순서 기반, 미분류는 마지막)
 function computeNumbers(){
-  const disp=new Map(), checkNum=new Map(); let n=0;
-  PINS.forEach(p=>{if(isCheck(p)){n++;checkNum.set(p.id,n);}});
-  let free=n;
+  const disp=new Map(), cats=getCats();
+  const checks=PINS.filter(isCheck);
+  const byCat={};
+  checks.forEach(p=>{const c=p.category||'';(byCat[c]=byCat[c]||[]).push(p);});
+  const checkLabel=new Map();
+  let catIdx=0;
+  cats.forEach(c=>{
+    if(!byCat[c]||!byCat[c].length)return;
+    catIdx++;
+    byCat[c].forEach((p,j)=>{const lbl=catIdx+'-'+(j+1);checkLabel.set(p.id,lbl);disp.set(p.id,{num:lbl,plus:false,catOrder:catIdx,seq:j+1});});
+  });
+  if(byCat['']&&byCat[''].length){
+    catIdx++;
+    byCat[''].forEach((p,j)=>{const lbl=catIdx+'-'+(j+1);checkLabel.set(p.id,lbl);disp.set(p.id,{num:lbl,plus:false,catOrder:catIdx,seq:j+1});});
+  }
   PINS.forEach(p=>{
-    if(isCheck(p)) disp.set(p.id,{num:checkNum.get(p.id),plus:false});
-    else if(p.parent&&checkNum.has(p.parent)) disp.set(p.id,{num:checkNum.get(p.parent),plus:true});
-    else {free++; disp.set(p.id,{num:free,plus:true});}
+    if(!isCheck(p)){
+      if(p.parent&&checkLabel.has(p.parent)) disp.set(p.id,{num:checkLabel.get(p.parent),plus:true});
+      else {catIdx++;disp.set(p.id,{num:catIdx+'-1',plus:true});}
+    }
   });
   return disp;
 }
@@ -810,7 +823,7 @@ document.getElementById('pCatNew').onclick=async()=>{if(!curPin)return;const n=a
 document.getElementById('pDel').onclick=async()=>{if(!curPin)return;if(!await modalConfirm('이 체크를 삭제할까요?','','삭제'))return;PINS=PINS.filter(p=>p!==curPin);savePins();closePanel();renderPins();};
 function renderThumbs(){const c=document.getElementById('pThumbs');c.innerHTML='';(curPin.photos||[]).forEach((src,i)=>{
   const d=document.createElement('div');d.className='t';d.innerHTML=`<img src="${src}"/><button class="x">✕</button>`;
-  d.querySelector('img').onclick=()=>openLightbox(curPin.photos,i,curPin.photos.map(()=>({cat:curPin.category,title:curPin.title,memo:curPin.memo})));
+  d.querySelector('img').onclick=()=>{const dn=computeNumbers().get(curPin.id);openLightbox(curPin.photos,i,curPin.photos.map(()=>({cat:curPin.category,title:curPin.title,memo:curPin.memo,chk:dn?dn.num:''})));};
   d.querySelector('.x').onclick=ev=>{ev.stopPropagation();curPin.photos.splice(i,1);savePins();renderThumbs();renderPins();};
   c.appendChild(d);});}
 
@@ -853,13 +866,22 @@ function drawCaptionBL(x,W,H,m){   // 사진 하단 왼쪽에 [분류] 제목 / 
   let y=H-stripH+pad;
   styled.forEach(s=>{x.font=(s.b?'bold ':'')+fs+'px "Apple SD Gothic Neo","Malgun Gothic",sans-serif';x.fillStyle=s.c;x.fillText(s.t,pad,y);y+=lh;});
 }
+function makeFname(m){
+  const parts=[];
+  if(m.chk)parts.push(m.chk);
+  if(m.cat)parts.push(m.cat);
+  if(m.title)parts.push(m.title);
+  if(m.memo)parts.push((m.memo+'').replace(/\s+/g,'').slice(0,10));
+  return (parts.join('_')||'사진').replace(/[\\/:*?"<>|]/g,'');
+}
 function saveOne(idx,mode){
-  const src=lbList[idx],m=lbMeta[idx]||{},nm='블루오션스파_사진'+(idx+1);
+  const src=lbList[idx],m=lbMeta[idx]||{};
+  const nm=makeFname(m);
   if(mode==='plain'){dlDataUrl(src,nm+'.jpg');return Promise.resolve();}
   return new Promise(res=>{const img=new Image();img.onload=()=>{const cv=document.createElement('canvas');cv.width=img.naturalWidth;cv.height=img.naturalHeight;
     const x=cv.getContext('2d');x.drawImage(img,0,0);
     const meta=mode==='loc'?{cat:m.cat,title:m.title}:m;
-    drawCaptionBL(x,cv.width,cv.height,meta);dlDataUrl(cv.toDataURL('image/jpeg',0.92),nm+'_라벨.jpg');res();};img.src=src;});
+    drawCaptionBL(x,cv.width,cv.height,meta);dlDataUrl(cv.toDataURL('image/jpeg',0.92),nm+'.jpg');res();};img.src=src;});
 }
 document.querySelector('.lb-save').onclick=async e=>{
   const b=e.target.closest('[data-scope]');if(!b)return;
@@ -871,7 +893,8 @@ document.querySelector('.lb-save').onclick=async e=>{
 // ---- 사진 보기 (전체 갤러리, 분류 필터 반영) ----
 document.getElementById('galBtn').onclick=()=>{
   const all=[],metas=[];
-  PINS.filter(p=>activeCat===null||(p.category||'')===activeCat).forEach(p=>{(p.photos||[]).forEach(src=>{all.push(src);metas.push({cat:p.category,title:p.title,memo:p.memo});});});
+  const dn=computeNumbers();
+  PINS.filter(p=>activeCat===null||(p.category||'')===activeCat).forEach(p=>{const d=dn.get(p.id);(p.photos||[]).forEach(src=>{all.push(src);metas.push({cat:p.category,title:p.title,memo:p.memo,chk:d?d.num:''});});});
   if(!all.length){alert(activeCat?`‘${activeCat}’ 분류에 등록된 사진이 없습니다.`:'등록된 사진이 없습니다. 체크·의견에 사진을 넣어보세요.');return;}
   openLightbox(all,0,metas);};
 
