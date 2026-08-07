@@ -161,6 +161,11 @@
   .lb .lb-grp{display:flex;align-items:center;gap:4px;background:rgba(20,28,40,.7);border:1px solid var(--line);border-radius:10px;padding:4px 8px}
   .lb .lb-grp b{font-size:11px;color:var(--muted);margin-right:4px;white-space:nowrap}
   .lb .lb-save .btn{background:transparent;border:1px solid var(--line);padding:5px 10px;font-size:11px}
+  .dropzone{position:relative;border:2px dashed transparent;border-radius:10px;padding:4px;transition:border-color .2s,background .2s;min-height:48px}
+  .dropzone.over{border-color:var(--accent);background:rgba(78,163,255,.08)}
+  .dz-hint{display:none;text-align:center;font-size:11px;color:var(--muted);padding:8px 0}
+  .dropzone.over .dz-hint{display:block}
+  .dropzone.empty .dz-hint{display:block}
   #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:80;color:var(--muted)}
   @media (max-width:640px){ .panel{width:calc(100vw - 24px)} .brand small{display:none} }
   /* 커스텀 모달 (prompt/confirm 대체) */
@@ -238,9 +243,12 @@
   <h3>내용 (인테리어 지시사항 등)</h3>
   <textarea id="pMemo" placeholder="예: 이 벽면에 W1200 수납장 제작, 문은 좌측 개폐 방향으로."></textarea>
   <h3>실사 사진</h3>
-  <div class="thumbs" id="pThumbs"></div>
+  <div class="dropzone" id="dropzone">
+    <div class="thumbs" id="pThumbs"></div>
+    <div class="dz-hint" id="dzHint">사진을 여기에 끌어다 놓으세요</div>
+  </div>
   <div class="prow">
-    <button class="btn" id="pAddImg">＋ 사진 추가</button>
+    <button class="btn" id="pAddImg">＋ 사진 추가 / 드래그</button>
     <button class="btn del" id="pDel">삭제</button>
     <button class="btn" id="pClose">닫기</button>
   </div>
@@ -823,19 +831,27 @@ function renderThumbs(){const c=document.getElementById('pThumbs');c.innerHTML='
   const d=document.createElement('div');d.className='t';d.innerHTML=`<img src="${src}"/><button class="x">✕</button>`;
   d.querySelector('img').onclick=()=>{const dn=computeNumbers().get(curPin.id);openLightbox(curPin.photos,i,curPin.photos.map(()=>({cat:curPin.category,title:curPin.title,memo:curPin.memo,chk:dn?dn.num:''})));};
   d.querySelector('.x').onclick=ev=>{ev.stopPropagation();curPin.photos.splice(i,1);savePins();renderThumbs();renderPins();};
-  c.appendChild(d);});}
+  c.appendChild(d);});
+  dz.classList.toggle('empty',!(curPin.photos&&curPin.photos.length));}
 
 // ---- photo upload (downscale -> dataURL) ----
 const fileInput=document.getElementById('fileInput');
-document.getElementById('pAddImg').onclick=()=>{fileInput.click();};
-fileInput.onchange=e=>{const files=[...e.target.files];fileInput.value='';if(!curPin)return;
-  files.forEach(file=>{const img=new Image();img.onload=()=>{
+function addImageFiles(files){
+  if(!curPin)return;
+  [...files].filter(f=>f.type.startsWith('image/')).forEach(file=>{const img=new Image();img.onload=()=>{
     const max=1000;let{width:w,height:h}=img;if(w>h&&w>max){h=h*max/w;w=max;}else if(h>max){w=w*max/h;h=max;}
     const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);
     curPin.photos=curPin.photos||[];curPin.photos.push(cv.toDataURL('image/jpeg',0.8));
-    try{savePins();}catch(err){alert('저장 공간이 부족합니다. 사진 수를 줄여주세요. (클라우드 저장은 다음 단계에서 지원)');}
+    try{savePins();}catch(err){alert('저장 공간이 부족합니다. 사진 수를 줄여주세요.');}
     renderThumbs();renderPins();};
-    img.src=URL.createObjectURL(file);});};
+    img.src=URL.createObjectURL(file);});
+}
+document.getElementById('pAddImg').onclick=()=>{fileInput.click();};
+fileInput.onchange=e=>{addImageFiles(e.target.files);fileInput.value='';};
+const dz=document.getElementById('dropzone');
+dz.ondragover=e=>{e.preventDefault();dz.classList.add('over');};
+dz.ondragleave=e=>{if(!dz.contains(e.relatedTarget))dz.classList.remove('over');};
+dz.ondrop=e=>{e.preventDefault();dz.classList.remove('over');addImageFiles(e.dataTransfer.files);};
 
 // ---- lightbox ----
 const lb=document.getElementById('lb'),lbImg=document.getElementById('lbImg'),lbCap=document.getElementById('lbCap'),lbStrip=document.getElementById('lbStrip');
