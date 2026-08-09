@@ -13,7 +13,7 @@
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);
     font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--txt)}
-  #app{position:fixed;inset:0}
+  #app{position:fixed;inset:0;overflow:hidden}
   canvas{display:block}
   .lbl{pointer-events:none;transform:translate(-50%,-50%);text-align:center;
     font-size:11.5px;font-weight:600;line-height:1.12;opacity:.8;text-shadow:0 1px 1.5px rgba(0,0,0,.5);white-space:nowrap}
@@ -48,7 +48,8 @@
   .ptlist .num.op{background:#2f7dd1}
   .ptlist .num.op.img{background:#c06de0}
   /* top bar */
-  .topbar{position:fixed;top:12px;left:12px;right:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;z-index:10}
+  .topbar{position:fixed;top:12px;left:12px;right:12px;max-width:calc(100vw - 24px);display:flex;gap:8px;flex-wrap:wrap;align-items:center;z-index:10;box-sizing:border-box}
+  .topbar>*{flex-shrink:0}
   .brand{font-weight:800;font-size:14px;padding:8px 12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(8px)}
   .brand small{display:block;font-weight:500;font-size:10px;color:var(--muted)}
   .group,.toggle{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;backdrop-filter:blur(8px)}
@@ -356,7 +357,7 @@ renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 app.appendChild(renderer.domElement);
 const labelRenderer=new CSS2DRenderer();
 labelRenderer.setSize(innerWidth,innerHeight);
-Object.assign(labelRenderer.domElement.style,{position:'fixed',top:'0',left:'0',pointerEvents:'none'});
+Object.assign(labelRenderer.domElement.style,{position:'fixed',top:'0',left:'0',pointerEvents:'none',overflow:'hidden'});
 app.appendChild(labelRenderer.domElement);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true; controls.dampingFactor=0.08; controls.target.set(0,VGAP*0.5,0);
@@ -368,7 +369,7 @@ const sun=new THREE.DirectionalLight(0xffffff,1.15); sun.position.set(40,80,30);
 sun.shadow.mapSize.set(2048,2048);
 const sc=95; Object.assign(sun.shadow.camera,{left:-sc,right:sc,top:sc,bottom:-sc,near:1,far:280}); scene.add(sun);
 const ground=new THREE.Mesh(new THREE.PlaneGeometry(700,700),new THREE.MeshStandardMaterial({color:0x0b1119,roughness:1}));
-ground.rotation.x=-Math.PI/2; ground.position.y=-0.25; ground.receiveShadow=true; scene.add(ground);
+ground.rotation.x=-Math.PI/2; ground.position.y=-16; ground.receiveShadow=true; scene.add(ground);
 
 const texLoader=new THREE.TextureLoader();
 const floorGroups={}; const allLabels=[]; const slabs=[];
@@ -402,12 +403,17 @@ function buildFloor(name){
     let w=(r.x1-r.x0)*S, d=(r.y1-r.y0)*S; w=Math.max(w-2*M,w*0.6); d=Math.max(d-2*M,d*0.6);
     const rg=new THREE.Group(); rg.position.set(wx((r.x0+r.x1)/2),0,wz((r.y0+r.y1)/2));
     const tile=new THREE.Mesh(r.round?new THREE.CircleGeometry(Math.min(w,d)/2,40):new THREE.PlaneGeometry(w,d),
-      new THREE.MeshStandardMaterial({color:zc.c,roughness:.85,transparent:true,opacity:is1F?.45:.9}));
+      new THREE.MeshStandardMaterial({color:zc.c,roughness:.85,transparent:true,opacity:is1F?.55:.9}));
     tile.rotation.x=-Math.PI/2; tile.position.y=0.06; tile.receiveShadow=true; rg.add(tile);
     const edge=new THREE.LineSegments(new THREE.EdgesGeometry(tile.geometry),
-      new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:is1F?.2:.55}));
-    edge.rotation.x=-Math.PI/2; edge.position.y=0.07; rg.add(edge);
-    const hy=(is1F?WALL*0.6:WALL)*S; const wm=new THREE.MeshStandardMaterial({color:zc.c,roughness:.7,transparent:true,opacity:is1F?.18:.5});
+      new THREE.LineBasicMaterial({color:is1F?0x9fd4ff:0xffffff,transparent:true,opacity:is1F?.9:.55}));
+    edge.rotation.x=-Math.PI/2; edge.position.y=is1F?0.12:0.07; rg.add(edge);
+    if(is1F && !r.round && !r.dome){
+      const topEdge=new THREE.LineSegments(new THREE.EdgesGeometry(tile.geometry),
+        new THREE.LineBasicMaterial({color:0x9fd4ff,transparent:true,opacity:.7}));
+      topEdge.rotation.x=-Math.PI/2; topEdge.position.y=(WALL*0.75*S)+0.02; rg.add(topEdge);
+    }
+    const hy=(is1F?WALL*0.75:WALL)*S; const wm=new THREE.MeshStandardMaterial({color:zc.c,roughness:.7,transparent:true,opacity:is1F?.28:.5});
     const th=0.09;
     const wall=(px,pz,ww,dd)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(ww,hy,dd),wm);m.position.set(px,hy/2,pz);m.castShadow=true;rg.add(m);rec.walls.push(m);};
     if(r.dome){                                   // 돔형(반구) — 불가마
@@ -582,7 +588,7 @@ let LOD='model',FLOOR='all',showLabels=true,showDims=false,camTween=null;
 function startTween(pos,tgt){camTween={p:pos.clone(),t:tgt.clone()};controls.enableDamping=false;}
 function setFloorUI(v){FLOOR=v;document.querySelectorAll('#floorBtns>button').forEach(b=>b.classList.toggle('on',b.getAttribute('data-floor')===v));}
 function focusPin(pin){
-  const pinVis=FLOOR===pin.floor||(FLOOR==='all'&&pin.floor!=='1F');
+  const pinVis=FLOOR===pin.floor||FLOOR==='all';
   if(!pinVis){setFloorUI(pin.floor);apply();}
   const gy=floorGroups[pin.floor].group.position.y;
   const p=new THREE.Vector3(pin.lx,gy+pin.ly,pin.lz);
@@ -592,7 +598,7 @@ function focusPin(pin){
 }
 function apply(){
   for(const name in floorGroups){const rec=floorGroups[name];
-    const vis=FLOOR===name||(FLOOR==='all'&&name!=='1F');
+    const vis=FLOOR===name||FLOOR==='all';
     rec.group.visible=vis;
     const isModel=LOD==='model';
     if(rec.texMesh) rec.texMesh.material.opacity=isModel?0:0.98;
