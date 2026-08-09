@@ -342,7 +342,7 @@ const ZONE = {
   core:{c:0x9aa3b2,n:'리셉션·코어'}, service:{c:0x8592a0,n:'설비·부속'},
   theme:{c:0xe0a94e,n:'찜질방'}, garden:{c:0x74c48a,n:'가든'}, amenity:{c:0x4bb3a6,n:'편의시설'},
   stair:{c:0x707a88,n:'비상계단'},
-  shop:{c:0x7a8a9e,n:'상가'}, f1svc:{c:0x647480,n:'1F 부속'}, parking:{c:0x505868,n:'주차장'},
+  shop:{c:0x7a8a9e,n:'상가'}, f1svc:{c:0x647480,n:'1F 부속'}, parking:{c:0x505868,n:'주차장'}, exit:{c:0x2a3340,n:'출입구'},
 };
 
 // ---------- three.js ----------
@@ -481,8 +481,10 @@ function buildCirc(rec,f){
 let pending=2; function done(){pending--; if(pending<=0)document.getElementById('loading').style.display='none';}
 // 1F 상가 데이터 — 준공도면 A-307 위젯 레이아웃 기준
 D.floors['1F']={z:-4200, rooms:[
-  // ── 상단열(북) 소형 상가 ── (좌측 111,112는 블루베리카페 L자 상단부, 나머지는 개별 상가)
+  // ── 좌측 = 블루베리카페 L자 (108-112호 통합) ──
   {name:"블루베리카페 108-112호",eng:"Blueberry Cafe",zone:"shop",round:false,nowall:false,dome:false,x0:0,y0:0,x1:11000,y1:22500},
+
+  // ── 상단열(북) 소형 상가 ──
   {name:"113",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:11000,y0:0,x1:15000,y1:4000},
   {name:"114",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:15000,y0:0,x1:19000,y1:4000},
   {name:"115",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:19000,y0:0,x1:23000,y1:4000},
@@ -490,32 +492,28 @@ D.floors['1F']={z:-4200, rooms:[
   {name:"117",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:27000,y0:0,x1:31000,y1:4000},
   {name:"118",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:31000,y0:0,x1:35000,y1:4000},
   {name:"119 관리사무소",eng:"Mgmt Office",zone:"shop",round:false,nowall:false,dome:false,x0:35000,y0:0,x1:39500,y1:4000},
-  {name:"출입구",eng:"Entrance",zone:"f1svc",round:false,nowall:true,dome:false,x0:39500,y0:0,x1:42500,y1:4000},
+  {name:"EXIT ↑",eng:"출입구",zone:"exit",round:false,nowall:true,dome:false,x0:39500,y0:0,x1:42500,y1:4000},
   {name:"창고",eng:"Storage",zone:"f1svc",round:false,nowall:false,dome:false,x0:42500,y0:0,x1:45000,y1:4000},
   {name:"창고",eng:"",zone:"f1svc",round:false,nowall:false,dome:false,x0:45000,y0:0,x1:47500,y1:4000},
 
-  // ── 중앙 코어 서비스 (PS/EV HALL/계단/TPS) ──
-  {name:"PS·EPS",eng:"120",zone:"f1svc",round:false,nowall:false,dome:false,x0:11000,y0:4000,x1:15500,y1:13500},
-  {name:"EV HALL",eng:"130",zone:"core",round:false,nowall:true,dome:false,x0:15500,y0:4000,x1:25500,y1:13500},
-  {name:"계단",eng:"Stairs",zone:"stair",round:false,nowall:false,dome:false,x0:25500,y0:4000,x1:30500,y1:13500},
-  {name:"TPS",eng:"",zone:"f1svc",round:false,nowall:false,dome:false,x0:30500,y0:4000,x1:34500,y1:13500},
+  // ── 중앙 서비스 라인 (한 호실 크기, EV HALL 중앙) ──
+  // 순서: 비상EV → 계단 → EV HALL → 계단 → 화장실(여/남 스택)
+  {name:"비상 EV",eng:"Emergency EV",zone:"core",round:false,nowall:false,dome:false,x0:13500,y0:4000,x1:18500,y1:13500},
+  {name:"계단",eng:"Stairs",zone:"stair",round:false,nowall:false,dome:false,x0:18500,y0:4000,x1:23500,y1:13500},
+  {name:"EV HALL",eng:"130",zone:"core",round:false,nowall:true,dome:false,x0:23500,y0:4000,x1:28500,y1:13500},
+  {name:"계단",eng:"Stairs",zone:"stair",round:false,nowall:false,dome:false,x0:28500,y0:4000,x1:33500,y1:13500},
+  {name:"화장실(여)",eng:"121",zone:"f1svc",round:false,nowall:false,dome:false,x0:33500,y0:4000,x1:38500,y1:8750},
+  {name:"화장실(남)",eng:"120",zone:"f1svc",round:false,nowall:false,dome:false,x0:33500,y0:8750,x1:38500,y1:13500},
 
-  // ── 우측 서비스열 (화장실, 계단실) ──
-  {name:"화장실(여)",eng:"121",zone:"f1svc",round:false,nowall:false,dome:false,x0:34500,y0:4000,x1:41500,y1:8700},
-  {name:"화장실(남)",eng:"120",zone:"f1svc",round:false,nowall:false,dome:false,x0:34500,y0:8700,x1:41500,y1:13500},
-  {name:"계단실",eng:"Stairwell",zone:"stair",round:false,nowall:false,dome:false,x0:41500,y0:4000,x1:47500,y1:13500},
-
-  // ── 우측 하단 서비스 ──
-  {name:"계단실",eng:"",zone:"stair",round:false,nowall:false,dome:false,x0:34500,y0:13500,x1:41500,y1:22500},
-
-  // ── 하단열(남) 상가 ── (좌측 5개 + 우측 2개, 사이에 통로)
+  // ── 하단열(남) 상가 + 중앙 출입구 ──
   {name:"107",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:11000,y0:22500,x1:16500,y1:30750},
   {name:"106 춘희김밥",eng:"Gimbap",zone:"shop",round:false,nowall:false,dome:false,x0:16500,y0:22500,x1:21500,y1:30750},
   {name:"105 빨래방",eng:"Laundry",zone:"shop",round:false,nowall:false,dome:false,x0:21500,y0:22500,x1:25500,y1:30750},
   {name:"104 빨래방",eng:"Laundry",zone:"shop",round:false,nowall:false,dome:false,x0:25500,y0:22500,x1:29500,y1:30750},
   {name:"103",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:29500,y0:22500,x1:33500,y1:30750},
-  {name:"102 여행사",eng:"Travel Agency",zone:"shop",round:false,nowall:false,dome:false,x0:40000,y0:22500,x1:44000,y1:30750},
-  {name:"101 사무실",eng:"Office",zone:"shop",round:false,nowall:false,dome:false,x0:44000,y0:22500,x1:47500,y1:30750},
+  {name:"EXIT ↓",eng:"출입구",zone:"exit",round:false,nowall:true,dome:false,x0:33500,y0:22500,x1:38500,y1:30750},
+  {name:"102 여행사",eng:"Travel Agency",zone:"shop",round:false,nowall:false,dome:false,x0:38500,y0:22500,x1:43000,y1:30750},
+  {name:"101 사무실",eng:"Office",zone:"shop",round:false,nowall:false,dome:false,x0:43000,y0:22500,x1:47500,y1:30750},
 
   // ── 우측 면 전체 = 주차장 입구 ──
   {name:"주차장 입구",eng:"Parking Entrance ↓",zone:"parking",round:false,nowall:true,dome:false,x0:47500,y0:0,x1:53900,y1:30750},
