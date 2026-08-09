@@ -479,35 +479,49 @@ function buildCirc(rec,f){
   });
 }
 let pending=2; function done(){pending--; if(pending<=0)document.getElementById('loading').style.display='none';}
-// 1F 상가 데이터
+// 1F 상가 데이터 — 준공도면 A-307 위젯 레이아웃 기준
 D.floors['1F']={z:-4200, rooms:[
-  {name:"블루베리카페",eng:"Blueberry Cafe",zone:"shop",round:false,nowall:false,dome:false,x0:0,y0:0,x1:9100,y1:22400},
-  {name:"블루베리카페",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:9100,y0:0,x1:15500,y1:9600},
-  {name:"113",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:15500,y0:0,x1:20300,y1:9600},
-  {name:"114",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:20300,y0:0,x1:25100,y1:9600},
-  {name:"115",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:25100,y0:0,x1:29900,y1:9600},
-  {name:"116",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:29900,y0:0,x1:34700,y1:9600},
-  {name:"117",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:34700,y0:0,x1:39500,y1:9600},
-  {name:"118",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:39500,y0:0,x1:44300,y1:9600},
-  {name:"119 관리사무소",eng:"Mgmt Office",zone:"shop",round:false,nowall:false,dome:false,x0:44300,y0:0,x1:47500,y1:9600},
-  {name:"출입구",eng:"Entrance",zone:"f1svc",round:false,nowall:true,dome:false,x0:47500,y0:0,x1:49500,y1:9600},
-  {name:"창고",eng:"Storage",zone:"f1svc",round:false,nowall:false,dome:false,x0:49500,y0:0,x1:51700,y1:9600},
-  {name:"창고",eng:"",zone:"f1svc",round:false,nowall:false,dome:false,x0:51700,y0:0,x1:53900,y1:9600},
-  {name:"107",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:0,y0:22400,x1:9100,y1:30750},
-  {name:"106 춘희김밥",eng:"Gimbap",zone:"shop",round:false,nowall:false,dome:false,x0:9100,y0:22400,x1:14500,y1:30750},
-  {name:"105 빨래방",eng:"Laundry",zone:"shop",round:false,nowall:false,dome:false,x0:14500,y0:22400,x1:19800,y1:30750},
-  {name:"104 빨래방",eng:"Laundry",zone:"shop",round:false,nowall:false,dome:false,x0:19800,y0:22400,x1:25100,y1:30750},
-  {name:"103",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:25100,y0:22400,x1:30000,y1:30750},
-  {name:"102 여행사",eng:"Travel Agency",zone:"shop",round:false,nowall:false,dome:false,x0:44300,y0:22400,x1:48600,y1:30750},
-  {name:"101 사무실",eng:"Office",zone:"shop",round:false,nowall:false,dome:false,x0:48600,y0:22400,x1:53000,y1:30750},
-  {name:"PS·EPS",eng:"",zone:"f1svc",round:false,nowall:false,dome:false,x0:9100,y0:12800,x1:15500,y1:22400},
-  {name:"EV HALL",eng:"",zone:"core",round:false,nowall:true,dome:false,x0:15500,y0:12800,x1:25100,y1:22400},
-  {name:"계단",eng:"Stairs",zone:"stair",round:false,nowall:false,dome:false,x0:25100,y0:14500,x1:30000,y1:19500},
-  {name:"화장실(여)",eng:"Women",zone:"f1svc",round:false,nowall:false,dome:false,x0:44300,y0:12000,x1:48600,y1:17000},
-  {name:"화장실(남)",eng:"Men",zone:"f1svc",round:false,nowall:false,dome:false,x0:44300,y0:17000,x1:48600,y1:22400},
-  {name:"계단실",eng:"Stairwell",zone:"stair",round:false,nowall:false,dome:false,x0:48600,y0:12000,x1:53000,y1:18000},
-  {name:"주차장",eng:"Parking",zone:"parking",round:false,nowall:true,dome:false,x0:49500,y0:9600,x1:53900,y1:22400},
-  {name:"외부계단",eng:"Ext. Stairs",zone:"stair",round:false,nowall:false,dome:false,x0:0,y0:-3000,x1:5000,y1:0},
+  // ── 상단열(북) 소형 상가 ── (좌측 111,112는 블루베리카페 L자 상단부, 나머지는 개별 상가)
+  {name:"블루베리카페 108-112호",eng:"Blueberry Cafe",zone:"shop",round:false,nowall:false,dome:false,x0:0,y0:0,x1:11000,y1:22500},
+  {name:"113",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:11000,y0:0,x1:15000,y1:4000},
+  {name:"114",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:15000,y0:0,x1:19000,y1:4000},
+  {name:"115",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:19000,y0:0,x1:23000,y1:4000},
+  {name:"116",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:23000,y0:0,x1:27000,y1:4000},
+  {name:"117",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:27000,y0:0,x1:31000,y1:4000},
+  {name:"118",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:31000,y0:0,x1:35000,y1:4000},
+  {name:"119 관리사무소",eng:"Mgmt Office",zone:"shop",round:false,nowall:false,dome:false,x0:35000,y0:0,x1:39500,y1:4000},
+  {name:"출입구",eng:"Entrance",zone:"f1svc",round:false,nowall:true,dome:false,x0:39500,y0:0,x1:42500,y1:4000},
+  {name:"창고",eng:"Storage",zone:"f1svc",round:false,nowall:false,dome:false,x0:42500,y0:0,x1:45000,y1:4000},
+  {name:"창고",eng:"",zone:"f1svc",round:false,nowall:false,dome:false,x0:45000,y0:0,x1:47500,y1:4000},
+
+  // ── 중앙 코어 서비스 (PS/EV HALL/계단/TPS) ──
+  {name:"PS·EPS",eng:"120",zone:"f1svc",round:false,nowall:false,dome:false,x0:11000,y0:4000,x1:15500,y1:13500},
+  {name:"EV HALL",eng:"130",zone:"core",round:false,nowall:true,dome:false,x0:15500,y0:4000,x1:25500,y1:13500},
+  {name:"계단",eng:"Stairs",zone:"stair",round:false,nowall:false,dome:false,x0:25500,y0:4000,x1:30500,y1:13500},
+  {name:"TPS",eng:"",zone:"f1svc",round:false,nowall:false,dome:false,x0:30500,y0:4000,x1:34500,y1:13500},
+
+  // ── 우측 서비스열 (화장실, 계단실) ──
+  {name:"화장실(여)",eng:"121",zone:"f1svc",round:false,nowall:false,dome:false,x0:34500,y0:4000,x1:41500,y1:8700},
+  {name:"화장실(남)",eng:"120",zone:"f1svc",round:false,nowall:false,dome:false,x0:34500,y0:8700,x1:41500,y1:13500},
+  {name:"계단실",eng:"Stairwell",zone:"stair",round:false,nowall:false,dome:false,x0:41500,y0:4000,x1:47500,y1:13500},
+
+  // ── 우측 하단 서비스 ──
+  {name:"계단실",eng:"",zone:"stair",round:false,nowall:false,dome:false,x0:34500,y0:13500,x1:41500,y1:22500},
+
+  // ── 하단열(남) 상가 ── (좌측 5개 + 우측 2개, 사이에 통로)
+  {name:"107",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:11000,y0:22500,x1:16500,y1:30750},
+  {name:"106 춘희김밥",eng:"Gimbap",zone:"shop",round:false,nowall:false,dome:false,x0:16500,y0:22500,x1:21500,y1:30750},
+  {name:"105 빨래방",eng:"Laundry",zone:"shop",round:false,nowall:false,dome:false,x0:21500,y0:22500,x1:25500,y1:30750},
+  {name:"104 빨래방",eng:"Laundry",zone:"shop",round:false,nowall:false,dome:false,x0:25500,y0:22500,x1:29500,y1:30750},
+  {name:"103",eng:"",zone:"shop",round:false,nowall:false,dome:false,x0:29500,y0:22500,x1:33500,y1:30750},
+  {name:"102 여행사",eng:"Travel Agency",zone:"shop",round:false,nowall:false,dome:false,x0:40000,y0:22500,x1:44000,y1:30750},
+  {name:"101 사무실",eng:"Office",zone:"shop",round:false,nowall:false,dome:false,x0:44000,y0:22500,x1:47500,y1:30750},
+
+  // ── 우측 면 전체 = 주차장 입구 ──
+  {name:"주차장 입구",eng:"Parking Entrance ↓",zone:"parking",round:false,nowall:true,dome:false,x0:47500,y0:0,x1:53900,y1:30750},
+
+  // ── 외부계단 (북쪽 벽 좌측 모서리, 밖으로 돌출) ──
+  {name:"외부계단",eng:"Ext. Stairs →",zone:"stair",round:false,nowall:false,dome:false,x0:500,y0:-3500,x1:5000,y1:0},
 ], corr:[]};
 buildFloor('2F'); buildFloor('3F'); buildFloor('1F');
 
