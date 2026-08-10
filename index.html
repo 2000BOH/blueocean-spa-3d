@@ -705,7 +705,7 @@ const VIEW_SLUG=new URLSearchParams(location.search).get('p');
 const IS_VIEWER=!!VIEW_SLUG;
 let VIEW_NAME='', VIEW_OK=false;
 if(IS_VIEWER){
-  VIEW_NAME=decodeURIComponent(VIEW_SLUG).replace(SPA_SLUG,'');
+  VIEW_NAME=VIEW_SLUG.replace(SPA_SLUG,'');   // URLSearchParams.get()이 이미 디코딩을 마친 상태
   const proj=PROJ.list.find(p=>p.name===VIEW_NAME);
   if(proj){ PROJ.active=proj.id; VIEW_OK=(proj.shareActive!==false); }  // 열람자는 이 프로젝트만
 }
@@ -933,7 +933,7 @@ document.getElementById('projNew').onclick=async()=>{const name=await modalPromp
 document.getElementById('projRename').onclick=async()=>{const p=activeProj();if(!p)return;const n=await modalPrompt('프로젝트명 수정',p.name);if(n&&n.trim()){p.name=n.trim();saveProjects(PROJ);refreshProjSel();}};
 
 // ── 🔗 링크 생성 (URL 끝 = 블루오션웰니스스파_프로젝트명) ──
-function makeShareUrl(name){return `${location.origin}${location.pathname}?p=${SPA_SLUG+name}`;}  // 한글 그대로(읽기 쉬운 링크)
+function makeShareUrl(name){return `${location.origin}${location.pathname}?p=${encodeURIComponent(SPA_SLUG+name)}`;}  // URL 인코딩 (카톡 등에서 공백 때문에 링크 끊기는 문제 방지)
 const linkpop=document.getElementById('linkpop');
 function curProj(){return PROJ.list.find(p=>p.id===PROJ.active);}
 function refreshLinkPop(){
