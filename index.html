@@ -169,6 +169,12 @@
   .lb .lb-grp{display:flex;align-items:center;gap:4px;background:rgba(20,28,40,.7);border:1px solid var(--line);border-radius:10px;padding:4px 8px}
   .lb .lb-grp b{font-size:11px;color:var(--muted);margin-right:4px;white-space:nowrap}
   .lb .lb-save .btn{background:transparent;border:1px solid var(--line);padding:5px 10px;font-size:11px}
+  /* 클라우드 상태 배지 */
+  .cloudbadge{position:fixed;right:12px;bottom:12px;z-index:40;font-size:11px;font-weight:700;padding:6px 11px;
+    border-radius:9px;border:1px solid var(--line);background:rgba(20,28,40,.8);backdrop-filter:blur(8px);color:var(--muted);pointer-events:none}
+  .cloudbadge.ok{color:#7ee6ac;border-color:rgba(37,194,116,.45)}
+  .cloudbadge.sync{color:#8fc4ff;border-color:rgba(47,125,209,.5)}
+  .cloudbadge.err{color:#ff9a9a;border-color:rgba(200,80,80,.5)}
   /* 열람 전용 표시 */
   #pView{display:none}
   #pView .ro-item{margin-bottom:11px}
@@ -328,9 +334,11 @@
 <script type="importmap">
 { "imports": {
   "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+  "supabase": "https://esm.sh/@supabase/supabase-js@2.45.4"
 }}
 </script>
+<script src="config.js"></script>
 <script src="data.js"></script>
 <script type="module">
 import * as THREE from 'three';
@@ -689,7 +697,7 @@ const LS_PROJ='spa_projects';
 function loadProjects(){let p; try{p=JSON.parse(localStorage.getItem(LS_PROJ));}catch(e){}
   if(!p||!p.list||!p.list.length){p={active:'p1',list:[{id:'p1',name:'기본 프로젝트'}]};localStorage.setItem(LS_PROJ,JSON.stringify(p));}
   return p;}
-function saveProjects(p){localStorage.setItem(LS_PROJ,JSON.stringify(p));}
+function saveProjects(p){localStorage.setItem(LS_PROJ,JSON.stringify(p));cloudPushProjects();}
 let PROJ=loadProjects();
 // ── 공유 링크 / 열람자 모드 판별 (URL ?p=블루오션웰니스스파_프로젝트명) ──
 const SPA_SLUG='블루오션 웰니스 스파_';
@@ -703,7 +711,7 @@ if(IS_VIEWER){
 }
 function pinsKey(id){return 'spa_pins_'+id;}
 function loadPins(){try{return JSON.parse(localStorage.getItem(pinsKey(PROJ.active)))||[];}catch(e){return [];}}
-function savePins(){localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));}
+function savePins(){localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));cloudPushPins();}
 
 // ── IndexedDB 사진 저장소 (localStorage 용량 한계 회피) ──
 const IDB_NAME='spa_media', IDB_STORE='photos';
@@ -730,8 +738,146 @@ async function migratePhotos(){
   if(changed)savePins();
 }
 let PINS=loadPins();
-// 사진 로드 + 기존 localStorage 사진 IndexedDB로 이전
-idbLoadAll().then(migratePhotos).then(()=>{try{renderPins();}catch(e){}}).catch(e=>console.warn('IndexedDB 초기화 실패:',e));
+
+// ================= ☁ 클라우드 동기화 (Supabase) =================
+const CFG=window.SPA_CONFIG||{};
+const CLOUD_ON=!!(CFG.SUPABASE_URL&&CFG.SUPABASE_ANON_KEY);
+const PHOTO_BUCKET='spa-photos';
+let sb=null, cloudReady=false;
+
+function setCloudBadge(state,msg){
+  let b=document.getElementById('cloudBadge');
+  if(!b){b=document.createElement('div');b.id='cloudBadge';b.className='cloudbadge';document.body.appendChild(b);}
+  b.className='cloudbadge '+state; b.textContent=msg;
+}
+async function cloudConnect(){
+  if(!CLOUD_ON){setCloudBadge('off','💾 로컬 저장 (이 브라우저에만)');return false;}
+  try{
+    const {createClient}=await import('supabase');
+    sb=createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:false}});
+    cloudReady=true; return true;
+  }catch(e){ console.warn('Supabase 연결 실패:',e); setCloudBadge('err','⚠ 클라우드 연결 실패 · 로컬 저장'); return false; }
+}
+
+// ── 쓰기 (디바운스) ──
+let pushProjTimer=null, pushPinTimer=null;
+function cloudPushProjects(){
+  if(!cloudReady||IS_VIEWER)return;
+  clearTimeout(pushProjTimer);
+  pushProjTimer=setTimeout(async()=>{
+    try{
+      const rows=PROJ.list.map(p=>({id:p.id,name:p.name,categories:p.categories||[],share_active:p.shareActive===true,updated_at:new Date().toISOString()}));
+      const {error}=await sb.from('spa_projects').upsert(rows,{onConflict:'id'});
+      if(error)throw error;
+      setCloudBadge('ok','☁ 클라우드 저장됨');
+    }catch(e){console.warn('프로젝트 업로드 실패:',e);setCloudBadge('err','⚠ 클라우드 저장 실패');}
+  },600);
+}
+// 열람자도 의견을 남기므로 핀 저장은 허용 (프로젝트 메타는 소유자만)
+function cloudPushPins(){
+  if(!cloudReady)return;
+  if(IS_VIEWER&&!VIEW_OK)return;
+  clearTimeout(pushPinTimer);
+  const pid=PROJ.active;
+  pushPinTimer=setTimeout(async()=>{
+    try{
+      const {error}=await sb.from('spa_pins').upsert({project_id:pid,pins:PINS,updated_at:new Date().toISOString()},{onConflict:'project_id'});
+      if(error)throw error;
+      setCloudBadge('ok','☁ 클라우드 저장됨');
+    }catch(e){console.warn('체크포인트 업로드 실패:',e);setCloudBadge('err','⚠ 클라우드 저장 실패');}
+  },600);
+}
+// ── 사진: Storage 업로드 / 삭제 ──
+function dataUrlToBlob(u){const [h,b]=u.split(',');const mime=(h.match(/:(.*?);/)||[])[1]||'image/jpeg';const bin=atob(b);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime});}
+async function cloudUploadPhoto(dataUrl,photoId){
+  if(!cloudReady)return null;
+  const path=`${PROJ.active}/${photoId}.jpg`;
+  const {error}=await sb.storage.from(PHOTO_BUCKET).upload(path,dataUrlToBlob(dataUrl),{contentType:'image/jpeg',upsert:true});
+  if(error)throw error;
+  return sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+async function cloudDeletePhoto(url){
+  if(!cloudReady||!url)return;
+  const m=url.match(new RegExp(`/${PHOTO_BUCKET}/(.+)$`));
+  if(!m)return;
+  try{ await sb.storage.from(PHOTO_BUCKET).remove([decodeURIComponent(m[1])]); }catch(e){}
+}
+
+// ── 최초 동기화 ──
+async function cloudPullOwner(){
+  const {data:projRows,error}=await sb.from('spa_projects').select('*');
+  if(error)throw error;
+  if(projRows&&projRows.length){
+    // 클라우드가 기준. 로컬에만 있는 프로젝트는 올린다.
+    const cloudIds=new Set(projRows.map(r=>r.id));
+    const localOnly=PROJ.list.filter(p=>!cloudIds.has(p.id));
+    PROJ.list=projRows.map(r=>({id:r.id,name:r.name,categories:r.categories||[],shareActive:!!r.share_active}))
+                      .concat(localOnly);
+    if(!PROJ.list.some(p=>p.id===PROJ.active))PROJ.active=PROJ.list[0].id;
+    localStorage.setItem(LS_PROJ,JSON.stringify(PROJ));
+    const {data:pinRow}=await sb.from('spa_pins').select('pins').eq('project_id',PROJ.active).maybeSingle();
+    if(pinRow&&Array.isArray(pinRow.pins)){PINS=pinRow.pins;localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));}
+    if(localOnly.length){cloudPushProjects();cloudPushPins();}
+  } else {
+    // 클라우드가 비어있음 → 이 PC 데이터를 최초 업로드
+    await cloudMigrateLocalPhotos();
+    cloudPushProjects(); cloudPushPins();
+  }
+}
+async function cloudPullViewer(){
+  const {data,error}=await sb.from('spa_projects').select('*').eq('name',VIEW_NAME).maybeSingle();
+  if(error)throw error;
+  if(!data){VIEW_OK=false;return;}
+  PROJ.active=data.id;
+  PROJ.list=[{id:data.id,name:data.name,categories:data.categories||[],shareActive:!!data.share_active}];
+  VIEW_OK=!!data.share_active;
+  const {data:pinRow}=await sb.from('spa_pins').select('pins').eq('project_id',data.id).maybeSingle();
+  PINS=(pinRow&&Array.isArray(pinRow.pins))?pinRow.pins:[];
+}
+// 이 PC의 IndexedDB 사진들을 Storage로 올리고 참조를 URL로 교체
+async function cloudMigrateLocalPhotos(){
+  let changed=false;
+  for(const pin of PINS){
+    if(!pin.photos||!pin.photos.length)continue;
+    for(let i=0;i<pin.photos.length;i++){
+      const ref=pin.photos[i];
+      if(typeof ref!=='string')continue;
+      let dataUrl=null,pid=null;
+      if(ref.startsWith('idb:')){pid=ref.slice(4);dataUrl=photoCache.get(pid);}
+      else if(ref.startsWith('data:')){pid=newPhotoId();dataUrl=ref;}
+      if(!dataUrl)continue;
+      try{const url=await cloudUploadPhoto(dataUrl,pid);if(url){pin.photos[i]=url;changed=true;}}catch(e){console.warn('사진 업로드 실패:',e);}
+    }
+  }
+  if(changed)localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));
+}
+
+function refreshAllUI(){
+  try{ refreshProjSel(); }catch(e){}
+  try{ renderPins(); }catch(e){}
+  try{ applyViewerBanner(); }catch(e){}
+}
+
+async function bootStorage(){
+  // 1) 로컬 사진 먼저 로드 (오프라인/로컬 모드에서도 즉시 보이게)
+  try{ await idbLoadAll(); await migratePhotos(); }catch(e){ console.warn('IndexedDB 초기화 실패:',e); }
+  refreshAllUI();
+  // 2) 클라우드 연결 후 동기화
+  const ok=await cloudConnect();
+  if(!ok){ viewerResolved=true; if(IS_VIEWER)VIEW_OK=false; applyViewerBanner(); return; }
+  setCloudBadge('sync','☁ 동기화 중…');
+  try{
+    if(IS_VIEWER) await cloudPullViewer();
+    else          await cloudPullOwner();
+    setCloudBadge('ok','☁ 클라우드 연결됨');
+  }catch(e){
+    console.warn('클라우드 동기화 실패:',e);
+    setCloudBadge('err','⚠ 클라우드 동기화 실패');
+    if(IS_VIEWER)VIEW_OK=false;
+  }
+  viewerResolved=true;
+  refreshAllUI();
+}
 const pinObjs=[]; // {pin, obj(CSS2DObject), el}
 // ── 분류(카테고리) ──
 const CAT_COLORS=['#ff5a5f','#4ea3ff','#25c274','#e0a94e','#c06de0','#00b4b4','#ff9f1c','#8a7dff'];
@@ -774,7 +920,15 @@ function renderCatLegend(){
 
 function refreshProjSel(){const s=document.getElementById('projSel');s.innerHTML=PROJ.list.map(p=>`<option value="${p.id}" ${p.id===PROJ.active?'selected':''}>${p.name}</option>`).join('');}
 refreshProjSel();
-document.getElementById('projSel').onchange=e=>{PROJ.active=e.target.value;saveProjects(PROJ);PINS=loadPins();closePanel();renderPins();};
+document.getElementById('projSel').onchange=async e=>{
+  PROJ.active=e.target.value;saveProjects(PROJ);PINS=loadPins();closePanel();renderPins();
+  if(cloudReady){                                   // 선택한 프로젝트의 최신 체크포인트를 클라우드에서
+    try{
+      const {data}=await sb.from('spa_pins').select('pins').eq('project_id',PROJ.active).maybeSingle();
+      if(data&&Array.isArray(data.pins)){PINS=data.pins;localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));renderPins();}
+    }catch(err){console.warn('프로젝트 전환 동기화 실패:',err);}
+  }
+};
 document.getElementById('projNew').onclick=async()=>{const name=await modalPrompt('새 프로젝트 이름','새 프로젝트');if(!name||!name.trim())return;const id='p'+Date.now();PROJ.list.push({id,name:name.trim(),shareActive:false});PROJ.active=id;saveProjects(PROJ);refreshProjSel();PINS=[];savePins();closePanel();renderPins();};
 document.getElementById('projRename').onclick=async()=>{const p=activeProj();if(!p)return;const n=await modalPrompt('프로젝트명 수정',p.name);if(n&&n.trim()){p.name=n.trim();saveProjects(PROJ);refreshProjSel();}};
 
@@ -804,12 +958,16 @@ document.getElementById('lpOpen').onclick=()=>{location.href=document.getElement
 document.getElementById('lpClose').onclick=()=>linkpop.style.display='none';
 
 // ── 열람자 모드 적용 ──
-if(IS_VIEWER){
+let viewerResolved=false;
+function applyViewerBanner(){
+  if(!IS_VIEWER)return;
   document.body.classList.add('viewer');
   const vb=document.getElementById('viewbanner');
-  if(VIEW_OK){ vb.textContent=`👁 열람 모드 · ${VIEW_NAME} — 의견만 추가할 수 있습니다`; }
+  if(!viewerResolved){ vb.textContent='☁ 도면 불러오는 중…'; vb.style.background=''; return; }
+  if(VIEW_OK){ vb.textContent=`👁 열람 모드 · ${VIEW_NAME} — 의견만 추가할 수 있습니다`; vb.style.background=''; }
   else { vb.textContent='⚠ 유효하지 않거나 닫힌 링크입니다'; vb.style.background='rgba(200,80,80,.92)'; }
 }
+applyViewerBanner();
 
 function clearPinObjs(){pinObjs.forEach(o=>{o.obj.parent&&o.obj.parent.remove(o.obj);});pinObjs.length=0;}
 function isCheck(p){return p.type!=='opinion';}
@@ -963,7 +1121,12 @@ function renderThumbs(){const c=document.getElementById('pThumbs');c.innerHTML='
   const src=resolvePhoto(ref);
   const d=document.createElement('div');d.className='t';d.innerHTML=`<img src="${src}"/>`+(ro?'':'<button class="x">✕</button>');
   d.querySelector('img').onclick=()=>{const dn=computeNumbers().get(curPin.id);const resolved=curPin.photos.map(resolvePhoto);openLightbox(resolved,i,resolved.map(()=>({cat:curPin.category,title:curPin.title,memo:curPin.memo,chk:dn?dn.num:''})));};
-  if(!ro)d.querySelector('.x').onclick=ev=>{ev.stopPropagation();const removed=curPin.photos.splice(i,1)[0];if(removed&&removed.startsWith&&removed.startsWith('idb:')){idbDel(removed.slice(4));photoCache.delete(removed.slice(4));}savePins();renderThumbs();renderPins();};
+  if(!ro)d.querySelector('.x').onclick=ev=>{ev.stopPropagation();const removed=curPin.photos.splice(i,1)[0];
+    if(typeof removed==='string'){
+      if(removed.startsWith('idb:')){idbDel(removed.slice(4));photoCache.delete(removed.slice(4));}
+      else if(removed.startsWith('http'))cloudDeletePhoto(removed);
+    }
+    savePins();renderThumbs();renderPins();};
   c.appendChild(d);});
   dz.classList.toggle('empty',!(curPin.photos&&curPin.photos.length));}
 
@@ -977,8 +1140,16 @@ function addImageFiles(files){
     const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);
     const dataUrl=cv.toDataURL('image/jpeg',0.8);
     const id=newPhotoId();
-    try{await idbSet(id,dataUrl);photoCache.set(id,dataUrl);}catch(err){alert('사진 저장 실패: '+(err&&err.message||err));return;}
-    curPin.photos=curPin.photos||[];curPin.photos.push('idb:'+id);
+    let ref=null;
+    if(cloudReady){                                  // 클라우드: Storage 업로드 → 공개 URL 저장
+      try{ ref=await cloudUploadPhoto(dataUrl,id); }
+      catch(err){ console.warn('클라우드 사진 업로드 실패, 로컬 저장으로 대체:',err); }
+    }
+    if(!ref){                                        // 로컬 폴백 (IndexedDB)
+      try{await idbSet(id,dataUrl);photoCache.set(id,dataUrl);ref='idb:'+id;}
+      catch(err){alert('사진 저장 실패: '+(err&&err.message||err));return;}
+    }
+    curPin.photos=curPin.photos||[];curPin.photos.push(ref);
     try{savePins();}catch(err){alert('메타 저장 실패: '+(err.message||err));}
     renderThumbs();renderPins();};
     img.src=URL.createObjectURL(file);});
@@ -1071,6 +1242,7 @@ document.getElementById('xlsBtn').onclick=()=>{
 };
 
 apply();
+bootStorage();   // ☁ 로컬 사진 로드 → 클라우드 동기화
 
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);labelRenderer.setSize(innerWidth,innerHeight);});
 function loop(){requestAnimationFrame(loop);
