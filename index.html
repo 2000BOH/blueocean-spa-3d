@@ -682,7 +682,34 @@ if(IS_VIEWER){
 function pinsKey(id){return 'spa_pins_'+id;}
 function loadPins(){try{return JSON.parse(localStorage.getItem(pinsKey(PROJ.active)))||[];}catch(e){return [];}}
 function savePins(){localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));}
+
+// ── IndexedDB 사진 저장소 (localStorage 용량 한계 회피) ──
+const IDB_NAME='spa_media', IDB_STORE='photos';
+const photoCache=new Map();  // photoId -> dataURL (in-memory)
+function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(IDB_NAME,1);r.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains(IDB_STORE))db.createObjectStore(IDB_STORE);};r.onsuccess=e=>res(e.target.result);r.onerror=e=>rej(e);});}
+function idbSet(k,v){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).put(v,k);tx.oncomplete=()=>res();tx.onerror=e=>rej(e);}));}
+function idbDel(k){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).delete(k);tx.oncomplete=()=>res();tx.onerror=e=>rej(e);}));}
+function idbLoadAll(){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readonly');const store=tx.objectStore(IDB_STORE);const kReq=store.getAllKeys();const vReq=store.getAll();tx.oncomplete=()=>{kReq.result.forEach((k,i)=>photoCache.set(k,vReq.result[i]));res();};tx.onerror=e=>rej(e);}));}
+function resolvePhoto(ref){if(!ref)return '';if(ref.startsWith&&ref.startsWith('idb:'))return photoCache.get(ref.slice(4))||'';return ref;}
+function newPhotoId(){return 'ph_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
+// 기존 localStorage 사진(data URL) → IndexedDB 자동 이전
+async function migratePhotos(){
+  let changed=false;
+  for(const pin of PINS){
+    if(!pin.photos||!pin.photos.length)continue;
+    for(let i=0;i<pin.photos.length;i++){
+      const p=pin.photos[i];
+      if(typeof p==='string'&&p.startsWith('data:')){
+        const id=newPhotoId();
+        try{await idbSet(id,p);photoCache.set(id,p);pin.photos[i]='idb:'+id;changed=true;}catch(e){}
+      }
+    }
+  }
+  if(changed)savePins();
+}
 let PINS=loadPins();
+// 사진 로드 + 기존 localStorage 사진 IndexedDB로 이전
+idbLoadAll().then(migratePhotos).then(()=>{try{renderPins();}catch(e){}}).catch(e=>console.warn('IndexedDB 초기화 실패:',e));
 const pinObjs=[]; // {pin, obj(CSS2DObject), el}
 // ── 분류(카테고리) ──
 const CAT_COLORS=['#ff5a5f','#4ea3ff','#25c274','#e0a94e','#c06de0','#00b4b4','#ff9f1c','#8a7dff'];
@@ -873,7 +900,7 @@ renderer.domElement.addEventListener('dblclick',e=>{
 
 // ---- hover popup ----
 const pop=document.getElementById('pop');
-function showPop(pin,ev){pop.innerHTML=`<b>${pin.title||'(제목 없음)'}</b>`+(pin.memo?`<div>${pin.memo.slice(0,80)}</div>`:'')+((pin.photos&&pin.photos[0])?`<img src="${pin.photos[0]}"/>`:'');pop.style.display='block';movePop(ev);}
+function showPop(pin,ev){const first=pin.photos&&pin.photos[0]?resolvePhoto(pin.photos[0]):'';pop.innerHTML=`<b>${pin.title||'(제목 없음)'}</b>`+(pin.memo?`<div>${pin.memo.slice(0,80)}</div>`:'')+(first?`<img src="${first}"/>`:'');pop.style.display='block';movePop(ev);}
 function movePop(ev){const px=Math.min(ev.clientX+14,innerWidth-232);pop.style.left=px+'px';pop.style.top=(ev.clientY+14)+'px';}
 function hidePop(){pop.style.display='none';}
 
@@ -905,10 +932,11 @@ document.getElementById('pCat').onchange=e=>{if(!curPin)return;curPin.category=e
 document.getElementById('pCatNew').onclick=async()=>{if(!curPin)return;const n=await modalPrompt('새 분류 이름 (예: 외부누수)');if(!n||!n.trim())return;addCat(n.trim());curPin.category=n.trim();savePins();
   const sel=document.getElementById('pCat');sel.innerHTML=catOptions(curPin.category);sel.value=curPin.category;renderPins();};
 document.getElementById('pDel').onclick=async()=>{if(!curPin)return;if(!await modalConfirm('이 체크를 삭제할까요?','','삭제'))return;PINS=PINS.filter(p=>p!==curPin);savePins();closePanel();renderPins();};
-function renderThumbs(){const c=document.getElementById('pThumbs');c.innerHTML='';(curPin.photos||[]).forEach((src,i)=>{
+function renderThumbs(){const c=document.getElementById('pThumbs');c.innerHTML='';(curPin.photos||[]).forEach((ref,i)=>{
+  const src=resolvePhoto(ref);
   const d=document.createElement('div');d.className='t';d.innerHTML=`<img src="${src}"/><button class="x">✕</button>`;
-  d.querySelector('img').onclick=()=>{const dn=computeNumbers().get(curPin.id);openLightbox(curPin.photos,i,curPin.photos.map(()=>({cat:curPin.category,title:curPin.title,memo:curPin.memo,chk:dn?dn.num:''})));};
-  d.querySelector('.x').onclick=ev=>{ev.stopPropagation();curPin.photos.splice(i,1);savePins();renderThumbs();renderPins();};
+  d.querySelector('img').onclick=()=>{const dn=computeNumbers().get(curPin.id);const resolved=curPin.photos.map(resolvePhoto);openLightbox(resolved,i,resolved.map(()=>({cat:curPin.category,title:curPin.title,memo:curPin.memo,chk:dn?dn.num:''})));};
+  d.querySelector('.x').onclick=ev=>{ev.stopPropagation();const removed=curPin.photos.splice(i,1)[0];if(removed&&removed.startsWith&&removed.startsWith('idb:')){idbDel(removed.slice(4));photoCache.delete(removed.slice(4));}savePins();renderThumbs();renderPins();};
   c.appendChild(d);});
   dz.classList.toggle('empty',!(curPin.photos&&curPin.photos.length));}
 
@@ -916,11 +944,14 @@ function renderThumbs(){const c=document.getElementById('pThumbs');c.innerHTML='
 const fileInput=document.getElementById('fileInput');
 function addImageFiles(files){
   if(!curPin)return;
-  [...files].filter(f=>f.type.startsWith('image/')).forEach(file=>{const img=new Image();img.onload=()=>{
+  [...files].filter(f=>f.type.startsWith('image/')).forEach(file=>{const img=new Image();img.onload=async()=>{
     const max=1000;let{width:w,height:h}=img;if(w>h&&w>max){h=h*max/w;w=max;}else if(h>max){w=w*max/h;h=max;}
     const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);
-    curPin.photos=curPin.photos||[];curPin.photos.push(cv.toDataURL('image/jpeg',0.8));
-    try{savePins();}catch(err){alert('저장 공간이 부족합니다. 사진 수를 줄여주세요.');}
+    const dataUrl=cv.toDataURL('image/jpeg',0.8);
+    const id=newPhotoId();
+    try{await idbSet(id,dataUrl);photoCache.set(id,dataUrl);}catch(err){alert('사진 저장 실패: '+(err&&err.message||err));return;}
+    curPin.photos=curPin.photos||[];curPin.photos.push('idb:'+id);
+    try{savePins();}catch(err){alert('메타 저장 실패: '+(err.message||err));}
     renderThumbs();renderPins();};
     img.src=URL.createObjectURL(file);});
 }
@@ -984,7 +1015,7 @@ document.querySelector('.lb-save').onclick=async e=>{
 document.getElementById('galBtn').onclick=()=>{
   const all=[],metas=[];
   const dn=computeNumbers();
-  PINS.filter(p=>activeCat===null||(p.category||'')===activeCat).forEach(p=>{const d=dn.get(p.id);(p.photos||[]).forEach(src=>{all.push(src);metas.push({cat:p.category,title:p.title,memo:p.memo,chk:d?d.num:''});});});
+  PINS.filter(p=>activeCat===null||(p.category||'')===activeCat).forEach(p=>{const d=dn.get(p.id);(p.photos||[]).forEach(ref=>{all.push(resolvePhoto(ref));metas.push({cat:p.category,title:p.title,memo:p.memo,chk:d?d.num:''});});});
   if(!all.length){alert(activeCat?`‘${activeCat}’ 분류에 등록된 사진이 없습니다.`:'등록된 사진이 없습니다. 체크·의견에 사진을 넣어보세요.');return;}
   openLightbox(all,0,metas);};
 
@@ -1001,7 +1032,7 @@ document.getElementById('xlsBtn').onclick=()=>{
   html+=`<h2>${esc(projName)}</h2><h4>저장일: ${dstr} · 총 ${rows.length}건${activeCat?` · 분류: ${esc(activeCat)}`:''}</h4>`;
   html+='<table><thead><tr><th style="width:60px">체크번호</th><th style="width:140px">분류</th><th style="width:140px">위치/구역</th><th style="width:280px">내용</th><th style="width:340px">사진</th></tr></thead><tbody>';
   rows.forEach(p=>{const d=dn.get(p.id);
-    const imgs=(p.photos||[]).map(src=>`<img src="${src}"/>`).join('');
+    const imgs=(p.photos||[]).map(ref=>`<img src="${resolvePhoto(ref)}"/>`).join('');
     html+=`<tr><td align="center"><b>${esc(d.num)}</b></td><td>${esc(p.category||'')}</td><td>${esc(p.title||'')}</td><td>${esc(p.memo||'')}</td><td>${imgs}</td></tr>`;
   });
   html+='</tbody></table></body></html>';
