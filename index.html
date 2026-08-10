@@ -848,12 +848,12 @@ async function cloudPullOwner(){
     if(!PROJ.list.some(p=>p.id===PROJ.active))PROJ.active=PROJ.list[0].id;
     localStorage.setItem(LS_PROJ,JSON.stringify(PROJ));
     await pullPinsForActiveProject();
-    if(localOnly.length){cloudPushProjects();cloudPushPins();}
+    if(localOnly.length)cloudPushProjects();
   } else {
     // 클라우드가 비어있음 → 이 PC 데이터를 최초 업로드
-    await cloudMigrateLocalPhotos();
     cloudPushProjects(); cloudPushPins();
   }
+  await migrateIdbPhotosToCloud();   // 이 브라우저에만 있던 사진(idb:)을 발견하면 즉시 클라우드로 백업
 }
 async function cloudPullViewer(){
   const {data,error}=await sb.from('spa_projects').select('*').eq('name',VIEW_NAME).maybeSingle();
@@ -864,9 +864,17 @@ async function cloudPullViewer(){
   VIEW_OK=!!data.share_active;
   await pullPinsForActiveProject();
 }
-// 이 PC의 IndexedDB 사진들을 Storage로 올리고 참조를 URL로 교체
-async function cloudMigrateLocalPhotos(){
-  let changed=false;
+// 활성 프로젝트의 핀 중 이 브라우저의 IndexedDB에만 있는 사진(idb:)을 찾아 Storage로 올리고 참조를 URL로 교체
+// (다른 프로젝트로 전환하거나, 클라우드에 이미 프로젝트가 존재하던 중이라도 매번 검사함 —
+//  "클라우드가 완전히 비어있을 때만" 이전하던 예전 로직은 사진이 영영 로컬에만 남는 결함이 있었음)
+let migratingPhotos=false;
+async function migrateIdbPhotosToCloud(){
+  if(!cloudReady||migratingPhotos)return;
+  const idbRefs=PINS.some(p=>(p.photos||[]).some(r=>typeof r==='string'&&(r.startsWith('idb:')||r.startsWith('data:'))));
+  if(!idbRefs)return;
+  migratingPhotos=true;
+  setCloudBadge('sync','☁ 사진 클라우드로 이전 중…');
+  let changed=false, failCount=0;
   for(const pin of PINS){
     if(!pin.photos||!pin.photos.length)continue;
     for(let i=0;i<pin.photos.length;i++){
@@ -875,11 +883,20 @@ async function cloudMigrateLocalPhotos(){
       let dataUrl=null,pid=null;
       if(ref.startsWith('idb:')){pid=ref.slice(4);dataUrl=photoCache.get(pid);}
       else if(ref.startsWith('data:')){pid=newPhotoId();dataUrl=ref;}
-      if(!dataUrl)continue;
-      try{const url=await cloudUploadPhoto(dataUrl,pid);if(url){pin.photos[i]=url;changed=true;}}catch(e){console.warn('사진 업로드 실패:',e);}
+      if(!dataUrl)continue;   // 이 브라우저에 실물이 없음 (다른 기기에서 추가된 사진일 수 있음) → 건드리지 않음
+      try{
+        const url=await cloudUploadPhoto(dataUrl,pid);
+        if(url){pin.photos[i]=url;changed=true;}
+      }catch(e){console.warn('사진 이전 실패:',ref,e);failCount++;}
     }
   }
-  if(changed)localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));
+  if(changed){
+    localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));
+    localStorage.setItem(pinsTsKey(PROJ.active),String(Date.now()));
+    await doPushPins(PROJ.active);
+  }
+  setCloudBadge(failCount?'err':'ok', failCount?`⚠ 사진 ${failCount}장 이전 실패`:'☁ 클라우드 연결됨');
+  migratingPhotos=false;
 }
 
 function refreshAllUI(){
@@ -953,7 +970,7 @@ refreshProjSel();
 document.getElementById('projSel').onchange=async e=>{
   PROJ.active=e.target.value;saveProjects(PROJ);PINS=loadPins();closePanel();renderPins();
   if(cloudReady){                                   // 선택한 프로젝트의 최신 체크포인트를 클라우드에서 (로컬이 더 최신이면 로컬 유지)
-    try{ await pullPinsForActiveProject(); renderPins(); }
+    try{ await pullPinsForActiveProject(); await migrateIdbPhotosToCloud(); renderPins(); }
     catch(err){console.warn('프로젝트 전환 동기화 실패:',err);}
   }
 };
