@@ -710,8 +710,13 @@ if(IS_VIEWER){
   if(proj){ PROJ.active=proj.id; VIEW_OK=(proj.shareActive!==false); }  // 열람자는 이 프로젝트만
 }
 function pinsKey(id){return 'spa_pins_'+id;}
+function pinsTsKey(id){return 'spa_pins_ts_'+id;}
 function loadPins(){try{return JSON.parse(localStorage.getItem(pinsKey(PROJ.active)))||[];}catch(e){return [];}}
-function savePins(){localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));cloudPushPins();}
+function savePins(){
+  localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));
+  localStorage.setItem(pinsTsKey(PROJ.active),String(Date.now()));   // 로컬 수정 시각(동기) — 새로고침 시 클라우드가 이 값보다 오래됐으면 로컬을 우선함
+  cloudPushPins();
+}
 
 // ── IndexedDB 사진 저장소 (localStorage 용량 한계 회피) ──
 const IDB_NAME='spa_media', IDB_STORE='photos';
@@ -759,33 +764,43 @@ async function cloudConnect(){
   }catch(e){ console.warn('Supabase 연결 실패:',e); setCloudBadge('err','⚠ 클라우드 연결 실패 · 로컬 저장'); return false; }
 }
 
-// ── 쓰기 (디바운스) ──
+// ── 쓰기 (디바운스 + 탭 이탈 시 즉시 flush) ──
 let pushProjTimer=null, pushPinTimer=null;
+let pendingProjPush=false, pendingPinPush=false;
+async function doPushProjects(){
+  if(!cloudReady||IS_VIEWER)return;
+  pendingProjPush=false;
+  try{
+    const rows=PROJ.list.map(p=>({id:p.id,name:p.name,categories:p.categories||[],share_active:p.shareActive===true,updated_at:new Date().toISOString()}));
+    const {error}=await sb.from('spa_projects').upsert(rows,{onConflict:'id'});
+    if(error)throw error;
+    setCloudBadge('ok','☁ 클라우드 저장됨');
+  }catch(e){console.warn('프로젝트 업로드 실패:',e);setCloudBadge('err','⚠ 클라우드 저장 실패');}
+}
 function cloudPushProjects(){
   if(!cloudReady||IS_VIEWER)return;
+  pendingProjPush=true;
   clearTimeout(pushProjTimer);
-  pushProjTimer=setTimeout(async()=>{
-    try{
-      const rows=PROJ.list.map(p=>({id:p.id,name:p.name,categories:p.categories||[],share_active:p.shareActive===true,updated_at:new Date().toISOString()}));
-      const {error}=await sb.from('spa_projects').upsert(rows,{onConflict:'id'});
-      if(error)throw error;
-      setCloudBadge('ok','☁ 클라우드 저장됨');
-    }catch(e){console.warn('프로젝트 업로드 실패:',e);setCloudBadge('err','⚠ 클라우드 저장 실패');}
-  },600);
+  pushProjTimer=setTimeout(doPushProjects,400);
 }
 // 열람자도 의견을 남기므로 핀 저장은 허용 (프로젝트 메타는 소유자만)
+async function doPushPins(pid){
+  if(!cloudReady)return;
+  if(IS_VIEWER&&!VIEW_OK)return;
+  pendingPinPush=false;
+  try{
+    const {error}=await sb.from('spa_pins').upsert({project_id:pid,pins:PINS,updated_at:new Date().toISOString()},{onConflict:'project_id'});
+    if(error)throw error;
+    setCloudBadge('ok','☁ 클라우드 저장됨');
+  }catch(e){console.warn('체크포인트 업로드 실패:',e);setCloudBadge('err','⚠ 클라우드 저장 실패');}
+}
 function cloudPushPins(){
   if(!cloudReady)return;
   if(IS_VIEWER&&!VIEW_OK)return;
   clearTimeout(pushPinTimer);
   const pid=PROJ.active;
-  pushPinTimer=setTimeout(async()=>{
-    try{
-      const {error}=await sb.from('spa_pins').upsert({project_id:pid,pins:PINS,updated_at:new Date().toISOString()},{onConflict:'project_id'});
-      if(error)throw error;
-      setCloudBadge('ok','☁ 클라우드 저장됨');
-    }catch(e){console.warn('체크포인트 업로드 실패:',e);setCloudBadge('err','⚠ 클라우드 저장 실패');}
-  },600);
+  pendingPinPush=true;
+  pushPinTimer=setTimeout(()=>doPushPins(pid),400);
 }
 // ── 사진: Storage 업로드 / 삭제 ──
 function dataUrlToBlob(u){const [h,b]=u.split(',');const mime=(h.match(/:(.*?);/)||[])[1]||'image/jpeg';const bin=atob(b);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime});}
@@ -804,6 +819,23 @@ async function cloudDeletePhoto(url){
 }
 
 // ── 최초 동기화 ──
+// 로컬 수정 시각이 클라우드 저장 시각보다 최신이면 로컬을 지킨다.
+// (저장 직후 새로고침되어 디바운스된 업로드가 아직 끝나지 않은 경우, 클라우드의 예전 값으로 덮어써서
+//  방금 입력한 내용·사진이 사라지는 문제를 막기 위함)
+async function pullPinsForActiveProject(){
+  const pid=PROJ.active;
+  const {data:pinRow}=await sb.from('spa_pins').select('pins,updated_at').eq('project_id',pid).maybeSingle();
+  const localTs=Number(localStorage.getItem(pinsTsKey(pid))||0);
+  const cloudTs=pinRow&&pinRow.updated_at?new Date(pinRow.updated_at).getTime():0;
+  if(pinRow&&Array.isArray(pinRow.pins)&&cloudTs>=localTs){
+    PINS=pinRow.pins;
+    localStorage.setItem(pinsKey(pid),JSON.stringify(PINS));
+    localStorage.setItem(pinsTsKey(pid),String(cloudTs||Date.now()));
+  } else if(localTs>0){
+    PINS=loadPins();          // 로컬이 더 최신(혹은 클라우드에 아직 없음) → 로컬 유지, 다시 업로드
+    cloudPushPins();
+  }
+}
 async function cloudPullOwner(){
   const {data:projRows,error}=await sb.from('spa_projects').select('*');
   if(error)throw error;
@@ -815,8 +847,7 @@ async function cloudPullOwner(){
                       .concat(localOnly);
     if(!PROJ.list.some(p=>p.id===PROJ.active))PROJ.active=PROJ.list[0].id;
     localStorage.setItem(LS_PROJ,JSON.stringify(PROJ));
-    const {data:pinRow}=await sb.from('spa_pins').select('pins').eq('project_id',PROJ.active).maybeSingle();
-    if(pinRow&&Array.isArray(pinRow.pins)){PINS=pinRow.pins;localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));}
+    await pullPinsForActiveProject();
     if(localOnly.length){cloudPushProjects();cloudPushPins();}
   } else {
     // 클라우드가 비어있음 → 이 PC 데이터를 최초 업로드
@@ -831,8 +862,7 @@ async function cloudPullViewer(){
   PROJ.active=data.id;
   PROJ.list=[{id:data.id,name:data.name,categories:data.categories||[],shareActive:!!data.share_active}];
   VIEW_OK=!!data.share_active;
-  const {data:pinRow}=await sb.from('spa_pins').select('pins').eq('project_id',data.id).maybeSingle();
-  PINS=(pinRow&&Array.isArray(pinRow.pins))?pinRow.pins:[];
+  await pullPinsForActiveProject();
 }
 // 이 PC의 IndexedDB 사진들을 Storage로 올리고 참조를 URL로 교체
 async function cloudMigrateLocalPhotos(){
@@ -922,11 +952,9 @@ function refreshProjSel(){const s=document.getElementById('projSel');s.innerHTML
 refreshProjSel();
 document.getElementById('projSel').onchange=async e=>{
   PROJ.active=e.target.value;saveProjects(PROJ);PINS=loadPins();closePanel();renderPins();
-  if(cloudReady){                                   // 선택한 프로젝트의 최신 체크포인트를 클라우드에서
-    try{
-      const {data}=await sb.from('spa_pins').select('pins').eq('project_id',PROJ.active).maybeSingle();
-      if(data&&Array.isArray(data.pins)){PINS=data.pins;localStorage.setItem(pinsKey(PROJ.active),JSON.stringify(PINS));renderPins();}
-    }catch(err){console.warn('프로젝트 전환 동기화 실패:',err);}
+  if(cloudReady){                                   // 선택한 프로젝트의 최신 체크포인트를 클라우드에서 (로컬이 더 최신이면 로컬 유지)
+    try{ await pullPinsForActiveProject(); renderPins(); }
+    catch(err){console.warn('프로젝트 전환 동기화 실패:',err);}
   }
 };
 document.getElementById('projNew').onclick=async()=>{const name=await modalPrompt('새 프로젝트 이름','새 프로젝트');if(!name||!name.trim())return;const id='p'+Date.now();PROJ.list.push({id,name:name.trim(),shareActive:false});PROJ.active=id;saveProjects(PROJ);refreshProjSel();PINS=[];savePins();closePanel();renderPins();};
@@ -1243,6 +1271,15 @@ document.getElementById('xlsBtn').onclick=()=>{
 
 apply();
 bootStorage();   // ☁ 로컬 사진 로드 → 클라우드 동기화
+
+// 탭이 백그라운드로 가거나 닫히기 직전, 대기 중인 저장을 즉시 시도
+// (모바일에서 사진 찍으러 앱 전환 시 디바운스 타이머가 취소되어 저장이 누락되는 것 방지)
+function flushPendingSaves(){
+  if(pendingProjPush){clearTimeout(pushProjTimer);doPushProjects();}
+  if(pendingPinPush){clearTimeout(pushPinTimer);doPushPins(PROJ.active);}
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingSaves();});
+addEventListener('pagehide',flushPendingSaves);
 
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);labelRenderer.setSize(innerWidth,innerHeight);});
 function loop(){requestAnimationFrame(loop);
