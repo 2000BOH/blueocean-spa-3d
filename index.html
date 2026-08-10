@@ -111,7 +111,12 @@
   .ptlist{position:fixed;left:12px;right:12px;bottom:12px;max-height:264px;overflow:auto;z-index:16;
     background:rgba(20,28,40,.66);border:1px solid var(--line);border-radius:12px;padding:10px;backdrop-filter:blur(10px)}
   .ptlist #ptrows{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))!important}
-  .ptlist .pthd{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between}
+  .ptlist .pthd{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;cursor:pointer;user-select:none}
+  .ptlist .pt-chev{display:inline-block;transition:transform .15s;margin-right:2px}
+  .ptlist.collapsed .pt-chev{transform:rotate(0deg)}
+  .ptlist:not(.collapsed) .pt-chev{transform:rotate(90deg)}
+  .ptlist.collapsed #ptrows{display:none!important}
+  .ptlist.collapsed{max-height:none}
   .ptlist #ptrows{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
   .ptlist .ptrow{display:flex;align-items:center;gap:6px;padding:6px 7px;border-radius:8px;cursor:pointer;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08)}
   .ptlist .ptrow:hover{background:rgba(78,163,255,.18);border-color:var(--accent)}
@@ -260,9 +265,9 @@
 <!-- 분류 범례 (좌측 중앙) — 누르면 해당 분류만 -->
 <div class="catlegend" id="catlegend"></div>
 
-<!-- 체크 포인트 목록 (우측 상단) -->
-<div class="ptlist" id="ptlist">
-  <div class="pthd"><span>📍 체크 포인트</span><span id="ptcount">0</span></div>
+<!-- 체크 포인트 목록 (우측 상단) — 기본은 접힌 상태, 헤더를 누르면 펼쳐짐 -->
+<div class="ptlist collapsed" id="ptlist">
+  <div class="pthd" id="pthd"><span><i class="pt-chev">▸</i> 📍 목록</span><span id="ptcount">0</span></div>
   <div id="ptrows"><div class="ptempty">‘📍 체크 추가’로 포인트를 만들면 여기에 번호·위치가 표시됩니다. 눌러서 상세를 봅니다.</div></div>
 </div>
 
@@ -1334,6 +1339,8 @@ document.getElementById('recoverBtn').onclick=async()=>{
 };
 document.getElementById('recoverClose').onclick=()=>document.getElementById('recoverBg').classList.remove('show');
 document.getElementById('recoverBg').onclick=e=>{if(e.target.id==='recoverBg')e.currentTarget.classList.remove('show');};
+
+document.getElementById('pthd').onclick=()=>document.getElementById('ptlist').classList.toggle('collapsed');
 
 apply();
 bootStorage();   // ☁ 로컬 사진 로드 → 클라우드 동기화
