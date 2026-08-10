@@ -137,7 +137,7 @@
   .linkpop .lp-row{display:flex;gap:8px;flex-wrap:wrap}
   .linkpop .lp-row .btn{flex:1;min-width:90px;text-align:center}
   /* 열람자 모드 : 소유자 전용 버튼 숨김 */
-  body.viewer #addBtn, body.viewer #linkBtn, body.viewer #projNew, body.viewer #projSel, body.viewer #projRename{display:none}
+  body.viewer #addBtn, body.viewer #linkBtn, body.viewer #projNew, body.viewer #projSel, body.viewer #projRename, body.viewer #recoverBtn{display:none}
   .viewbanner{position:fixed;top:0;left:0;right:0;z-index:45;display:none;text-align:center;
     background:rgba(47,125,209,.96);color:#fff;font-size:12.5px;font-weight:700;padding:9px 16px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
   body.viewer .viewbanner{display:block}
@@ -211,6 +211,12 @@
   .modal-btns .m-ok:hover{opacity:.85}
   .modal-btns .m-del{background:#ff5a5f;color:#fff;border-color:#ff5a5f}
   .modal-btns .m-del:hover{opacity:.85}
+  .recover-box{width:min(560px,92vw)}
+  .recover-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;max-height:50vh;overflow:auto;margin:10px 0}
+  .recover-grid .rc{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);aspect-ratio:1;background:#0e1622}
+  .recover-grid .rc img{width:100%;height:100%;object-fit:cover;cursor:pointer}
+  .recover-grid .rc a{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;padding:2px 6px;border-radius:5px;text-decoration:none}
+  .recover-empty{font-size:13px;color:var(--muted);padding:14px 0;text-align:center}
 </style>
 </head>
 <body>
@@ -246,6 +252,7 @@
   <button class="btn tb" id="galBtn">🖼 사진</button>
   <button class="btn tb" id="xlsBtn">📊 엑셀</button>
   <button class="btn tb" id="linkBtn">🔗 링크</button>
+  <button class="btn ghost" id="recoverBtn" title="핀 정보를 잃어버렸어도 이 브라우저에 남아있는 사진을 찾아줍니다">🩹 사진 복구</button>
 </div>
 
 <div class="pop" id="pop"></div>
@@ -328,6 +335,16 @@
 
 <!-- 열람자 안내 배너 -->
 <div class="viewbanner" id="viewbanner"></div>
+
+<!-- 사진 복구 (핀 정보를 잃었어도 이 브라우저에 남은 사진 찾기) -->
+<div class="modal-bg" id="recoverBg">
+  <div class="modal-box recover-box">
+    <h3>🩹 사진 복구</h3>
+    <p id="recoverDesc">이 브라우저에 저장되어 있지만 지금 어떤 체크포인트에도 연결되어 있지 않은 사진을 찾습니다. 체크포인트 정보(제목·분류)가 실수로 사라졌어도 첨부했던 사진은 남아있을 수 있습니다.</p>
+    <div id="recoverGrid" class="recover-grid"></div>
+    <div class="modal-btns"><button class="m-cancel" id="recoverClose">닫기</button></div>
+  </div>
+</div>
 
 <input type="file" id="fileInput" accept="image/*" multiple style="display:none"/>
 
@@ -1285,6 +1302,38 @@ document.getElementById('xlsBtn').onclick=()=>{
   const a=document.createElement('a');a.href=url;a.download=`${projName}_체크포인트_${dstr}.xls`;
   document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
 };
+
+// ---- 🩹 사진 복구 (핀에서 참조가 끊긴 채 이 브라우저에 남아있는 사진 찾기) ----
+async function findOrphanPhotos(){
+  await idbLoadAll();   // photoCache를 최신 상태로
+  const referenced=new Set();
+  PROJ.list.forEach(p=>{
+    try{
+      const pins=JSON.parse(localStorage.getItem(pinsKey(p.id))||'[]');
+      pins.forEach(pin=>(pin.photos||[]).forEach(ref=>{
+        if(typeof ref==='string'&&ref.startsWith('idb:'))referenced.add(ref.slice(4));
+      }));
+    }catch(e){}
+  });
+  return [...photoCache.keys()].filter(k=>!referenced.has(k));
+}
+document.getElementById('recoverBtn').onclick=async()=>{
+  const bg=document.getElementById('recoverBg'), grid=document.getElementById('recoverGrid');
+  grid.innerHTML='<div class="recover-empty">검색 중…</div>';
+  bg.classList.add('show');
+  const orphans=await findOrphanPhotos();
+  if(!orphans.length){ grid.innerHTML='<div class="recover-empty">연결이 끊긴 사진이 없습니다. (모두 체크포인트에 정상 연결되어 있거나, 이 브라우저에 남은 게 없습니다)</div>'; return; }
+  grid.innerHTML='';
+  orphans.forEach(id=>{
+    const src=photoCache.get(id);
+    const d=document.createElement('div'); d.className='rc';
+    d.innerHTML=`<img src="${src}"/><a download="복구사진_${id}.jpg" href="${src}">💾</a>`;
+    d.querySelector('img').onclick=()=>openLightbox([src],0,[{title:'복구된 사진'}]);
+    grid.appendChild(d);
+  });
+};
+document.getElementById('recoverClose').onclick=()=>document.getElementById('recoverBg').classList.remove('show');
+document.getElementById('recoverBg').onclick=e=>{if(e.target.id==='recoverBg')e.currentTarget.classList.remove('show');};
 
 apply();
 bootStorage();   // ☁ 로컬 사진 로드 → 클라우드 동기화
