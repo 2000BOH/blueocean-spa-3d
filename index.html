@@ -107,7 +107,7 @@
   .lb .strip img.on{opacity:1;outline:2px solid var(--accent)}
   .lb .cap{color:#cfe0f0;font-size:13px;margin-top:10px;font-weight:600}
   /* 포인트 목록(우측 상단) */
-  .ptlist{position:fixed;left:12px;bottom:12px;width:min(560px,calc(100vw - 24px));max-height:264px;overflow:auto;z-index:16;
+  .ptlist{position:fixed;left:12px;bottom:12px;width:min(780px,calc(100vw - 24px));max-height:264px;overflow:auto;z-index:16;
     background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;backdrop-filter:blur(10px)}
   .ptlist .pthd{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between}
   .ptlist #ptrows{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
@@ -115,7 +115,7 @@
   .ptlist .ptrow:hover{background:rgba(78,163,255,.18);border-color:var(--accent)}
   .ptlist .num{flex:0 0 auto;min-width:18px;padding:0 5px;height:18px;border-radius:9px;background:var(--pin);color:#fff;font-weight:800;font-size:10px;display:flex;align-items:center;justify-content:center}
   .ptlist .num.img{background:#ff9f1c}
-  .ptlist .ptt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;font-weight:600;color:var(--txt)}
+  .ptlist .ptt{flex:1;min-width:0;font-size:11.5px;font-weight:600;color:var(--txt);white-space:normal;word-break:break-all;line-height:1.3}
   .ptlist .ptempty{grid-column:1/-1;font-size:11px;color:var(--muted);padding:6px;line-height:1.4}
   .dirlabel{pointer-events:none;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;
     color:#eaf2fb;background:rgba(16,24,36,.6);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:8px 14px;
@@ -141,14 +141,14 @@
   body.viewer .viewbanner{display:block}
   body.viewer .topbar{top:46px}
   /* 분류 범례 (좌측 중앙) */
-  .catlegend{position:fixed;left:12px;top:50%;transform:translateY(-50%);z-index:14;min-width:150px;max-width:210px;max-height:64vh;overflow:auto;
+  .catlegend{position:fixed;left:12px;top:50%;transform:translateY(-50%);z-index:14;min-width:150px;max-width:340px;max-height:64vh;overflow:auto;
     background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;backdrop-filter:blur(10px);display:none}
   .catlegend .cl-hd{font-size:11px;font-weight:800;color:var(--muted);margin-bottom:7px}
   .catlegend .cl-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:700;margin-bottom:2px}
   .catlegend .cl-row:hover{background:rgba(255,255,255,.07)}
   .catlegend .cl-row.on{background:var(--accent);color:#04121f}
   .catlegend .cl-sw{width:12px;height:12px;border-radius:3px;flex:0 0 auto}
-  .catlegend .cl-t,.catlegend .cl-all{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .catlegend .cl-t,.catlegend .cl-all{flex:1;white-space:normal;word-break:break-all;line-height:1.3}
   .catlegend .cl-n{font-size:11px;opacity:.75;font-weight:600}
   .catlegend .cl-add{margin-top:6px;width:100%;background:transparent;border:1px dashed var(--line);color:var(--muted);border-radius:8px;padding:7px;font-size:12px;font-weight:600;cursor:pointer}
   .catlegend .cl-add:hover{color:var(--txt);border-color:var(--accent)}
@@ -156,6 +156,9 @@
   .catlegend .cl-row:hover .cl-acts{opacity:1}
   .catlegend .cl-acts button{background:none;border:none;cursor:pointer;font-size:11px;padding:2px 4px;color:var(--muted);border-radius:4px}
   .catlegend .cl-acts button:hover{color:#fff;background:rgba(255,255,255,.15)}
+  .catlegend .cl-row[draggable="true"]{cursor:grab}
+  .catlegend .cl-row.dragging{opacity:.4}
+  .catlegend .cl-row.drag-over{border-top:2px solid var(--accent);margin-top:-2px}
   body.viewer .catlegend .cl-add, body.viewer .catlegend .cl-acts{display:none}
   .pin .cap .cdot,.ptlist .cdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle;flex:0 0 auto}
   .panel select{width:100%;background:#0e1622;border:1px solid var(--line);border-radius:9px;color:var(--txt);padding:9px;font-size:13px}
@@ -686,6 +689,7 @@ function getCats(){const p=activeProj();return (p&&p.categories)||[];}
 function addCat(name){name=(name||'').trim();if(!name)return null;const p=activeProj();p.categories=p.categories||[];if(!p.categories.includes(name)){p.categories.push(name);saveProjects(PROJ);}return name;}
 function renameCat(old,neu){neu=(neu||'').trim();if(!neu||neu===old)return;const p=activeProj();if(!p||!p.categories)return;const i=p.categories.indexOf(old);if(i<0)return;p.categories[i]=neu;PINS.forEach(pin=>{if(pin.category===old)pin.category=neu;});saveProjects(PROJ);savePins();if(activeCat===old)activeCat=neu;}
 function removeCat(name){const p=activeProj();if(!p||!p.categories)return;p.categories=p.categories.filter(c=>c!==name);PINS.forEach(pin=>{if(pin.category===name)pin.category='';});saveProjects(PROJ);savePins();if(activeCat===name)activeCat=null;}
+function moveCat(from,to){const p=activeProj();if(!p||!p.categories)return;const c=p.categories.splice(from,1)[0];p.categories.splice(to,0,c);saveProjects(PROJ);}
 function catColor(name){const i=getCats().indexOf(name);return CAT_COLORS[(i<0?0:i)%CAT_COLORS.length];}
 function catOptions(cur){return '<option value="">(분류 없음)</option>'+getCats().map(c=>`<option value="${c}"${cur===c?' selected':''}>${c}</option>`).join('');}
 function renderCatLegend(){
@@ -693,15 +697,23 @@ function renderCatLegend(){
   if(!cats.length && IS_VIEWER){el.style.display='none';return;}
   el.style.display='block';
   const counts={}; PINS.forEach(p=>{const c=p.category||'';if(c)counts[c]=(counts[c]||0)+1;});
-  let h='<div class="cl-hd">분류 (누르면 필터)</div>';
+  let h='<div class="cl-hd">분류 (누르면 필터, 드래그로 순서 변경)</div>';
   h+=`<div class="cl-row${activeCat===null?' on':''}" data-c=""><span class="cl-all">전체</span><span class="cl-n">${PINS.length}</span></div>`;
-  cats.forEach(c=>{h+=`<div class="cl-row${activeCat===c?' on':''}" data-c="${c}"><span class="cl-sw" style="background:${catColor(c)}"></span><span class="cl-t">${c}</span><span class="cl-n">${counts[c]||0}</span><span class="cl-acts"><button data-edit="${c}" title="수정">✏️</button><button data-del="${c}" title="삭제">🗑</button></span></div>`;});
+  cats.forEach((c,i)=>{h+=`<div class="cl-row${activeCat===c?' on':''}" data-c="${c}" draggable="true" data-idx="${i}"><span class="cl-sw" style="background:${catColor(c)}"></span><span class="cl-t">${c}</span><span class="cl-n">${counts[c]||0}</span><span class="cl-acts"><button data-edit="${c}" title="수정">✏️</button><button data-del="${c}" title="삭제">🗑</button></span></div>`;});
   h+='<button class="cl-add" id="clAdd">＋ 분류 추가</button>';
   el.innerHTML=h;
   el.querySelectorAll('.cl-row').forEach(r=>{r.onclick=e=>{if(e.target.closest('.cl-acts'))return;const c=r.getAttribute('data-c');activeCat=(c===''?null:c);renderPins();};});
   el.querySelectorAll('[data-edit]').forEach(b=>{b.onclick=async e=>{e.stopPropagation();const old=b.getAttribute('data-edit');const n=await modalPrompt('분류 이름 수정',old);if(n&&n.trim()){renameCat(old,n.trim());renderCatLegend();renderPins();}};});
   el.querySelectorAll('[data-del]').forEach(b=>{b.onclick=async e=>{e.stopPropagation();const c=b.getAttribute('data-del');if(await modalConfirm(`'${c}' 분류 삭제`,'해당 분류의 체크포인트는 분류 없음으로 변경됩니다.')){removeCat(c);renderCatLegend();renderPins();}};});
   const ab=el.querySelector('#clAdd'); if(ab)ab.onclick=async()=>{const n=await modalPrompt('새 분류 이름 (예: 외부누수)');if(n&&n.trim()){addCat(n.trim());renderCatLegend();}};
+  // 드래그 앤 드롭 순서 변경
+  let dragIdx=null;
+  el.querySelectorAll('.cl-row[draggable]').forEach(r=>{
+    r.ondragstart=e=>{dragIdx=+r.dataset.idx;r.classList.add('dragging');e.dataTransfer.effectAllowed='move';};
+    r.ondragend=()=>{r.classList.remove('dragging');el.querySelectorAll('.cl-row').forEach(x=>x.classList.remove('drag-over'));};
+    r.ondragover=e=>{e.preventDefault();e.dataTransfer.dropEffect='move';el.querySelectorAll('.cl-row').forEach(x=>x.classList.remove('drag-over'));r.classList.add('drag-over');};
+    r.ondrop=e=>{e.preventDefault();const toIdx=+r.dataset.idx;if(dragIdx!==null&&dragIdx!==toIdx){moveCat(dragIdx,toIdx);renderCatLegend();renderPins();}dragIdx=null;};
+  });
 }
 
 function refreshProjSel(){const s=document.getElementById('projSel');s.innerHTML=PROJ.list.map(p=>`<option value="${p.id}" ${p.id===PROJ.active?'selected':''}>${p.name}</option>`).join('');}
