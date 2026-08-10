@@ -705,7 +705,11 @@ function renderCatLegend(){
   cats.forEach((c,i)=>{h+=`<div class="cl-row${activeCat===c?' on':''}" data-c="${c}" draggable="true" data-idx="${i}"><span class="cl-sw" style="background:${catColor(c)}"></span><span class="cl-t">${c}</span><span class="cl-n">${counts[c]||0}</span><span class="cl-acts"><button data-edit="${c}" title="수정">✏️</button><button data-del="${c}" title="삭제">🗑</button></span></div>`;});
   h+='<button class="cl-add" id="clAdd">＋ 분류 추가</button>';
   el.innerHTML=h;
-  el.querySelectorAll('.cl-row').forEach(r=>{r.onclick=e=>{if(e.target.closest('.cl-acts'))return;const c=r.getAttribute('data-c');activeCat=(c===''?null:c);renderPins();};});
+  el.querySelectorAll('.cl-row').forEach(r=>{r.onclick=e=>{if(e.target.closest('.cl-acts'))return;const c=r.getAttribute('data-c');activeCat=(c===''?null:c);
+    // 해당 분류가 있는 층만 자동 표시
+    if(activeCat){const floors=new Set(PINS.filter(p=>(p.category||'')===activeCat).map(p=>p.floor));const arr=[...floors];const target=arr.length===1?arr[0]:'all';setFloorUI(target);frameFloor(target);apply();}
+    else{renderPins();}
+  };});
   el.querySelectorAll('[data-edit]').forEach(b=>{b.onclick=async e=>{e.stopPropagation();const old=b.getAttribute('data-edit');const n=await modalPrompt('분류 이름 수정',old);if(n&&n.trim()){renameCat(old,n.trim());renderCatLegend();renderPins();}};});
   el.querySelectorAll('[data-del]').forEach(b=>{b.onclick=async e=>{e.stopPropagation();const c=b.getAttribute('data-del');if(await modalConfirm(`'${c}' 분류 삭제`,'해당 분류의 체크포인트는 분류 없음으로 변경됩니다.')){removeCat(c);renderCatLegend();renderPins();}};});
   const ab=el.querySelector('#clAdd'); if(ab)ab.onclick=async()=>{const n=await modalPrompt('새 분류 이름 (예: 외부누수)');if(n&&n.trim()){addCat(n.trim());renderCatLegend();}};
@@ -796,8 +800,10 @@ function renderPins(){
     const cdot=pin.category?`<i class="cdot" style="background:${catColor(pin.category)}"></i>`:'';
     const cap=(pin.title||pin.category)?`<div class="cap">${cdot}${pin.title||''}</div>`:'';
     const el=document.createElement('div');
-    if(d.plus){ el.className='pin opinion'+(hasImg?' hasimg':''); el.innerHTML=`<div class="obadge">${d.num}<i class="plus">+</i></div>`+cap; }
-    else { el.className='pin'+(hasImg?' hasimg':''); el.innerHTML=`<div class="dot"><span>${d.num}</span></div>`+cap; }
+    const bg=pin.category?catColor(pin.category):'';
+    const style=bg?` style="background:${bg}"`:'';
+    if(d.plus){ el.className='pin opinion'+(hasImg?' hasimg':''); el.innerHTML=`<div class="obadge"${style}>${d.num}<i class="plus">+</i></div>`+cap; }
+    else { el.className='pin'+(hasImg?' hasimg':''); el.innerHTML=`<div class="dot"${style}><span>${d.num}</span></div>`+cap; }
     el.onmouseenter=ev=>showPop(pin,ev); el.onmousemove=ev=>movePop(ev); el.onmouseleave=hidePop;
     el.onclick=ev=>{ev.stopPropagation(); if(opinionMode&&isCheck(pin)) addOpinionTo(pin); else openPanel(pin);};
     const obj=new CSS2DObject(el); obj.position.set(pin.lx,pin.ly,pin.lz); obj.visible=vis;
@@ -817,6 +823,7 @@ function renderPointList(disp){
     const d=disp.get(pin.id); const hasImg=pin.photos&&pin.photos.length;
     const row=document.createElement('div'); row.className='ptrow';
     const num=document.createElement('span'); num.className='num'+(d.plus?' op':'')+(hasImg?' img':''); num.textContent=d.num+(d.plus?'+':'');
+    if(pin.category)num.style.background=catColor(pin.category);
     const tt=document.createElement('span'); tt.className='ptt';
     if(pin.category){const dot=document.createElement('i');dot.className='cdot';dot.style.background=catColor(pin.category);tt.appendChild(dot);}
     tt.appendChild(document.createTextNode(pin.title||'('+pin.floor+' 미입력)'));
