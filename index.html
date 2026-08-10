@@ -63,6 +63,7 @@
   .toggle>button.on{background:#2a3547;color:#fff}
   .btn{appearance:none;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--txt);
     padding:9px 13px;font-size:13px;font-weight:700;cursor:pointer;backdrop-filter:blur(8px)}
+  .btn.tb{min-width:82px;padding:9px 10px;text-align:center;box-sizing:border-box}
   .btn:hover{background:rgba(255,255,255,.06)}
   .btn.active{background:var(--pin);border-color:var(--pin);color:#fff}
   .btn.ghost{color:var(--muted);font-weight:600}
@@ -107,8 +108,9 @@
   .lb .strip img.on{opacity:1;outline:2px solid var(--accent)}
   .lb .cap{color:#cfe0f0;font-size:13px;margin-top:10px;font-weight:600}
   /* 포인트 목록(우측 상단) */
-  .ptlist{position:fixed;left:12px;bottom:12px;width:min(780px,calc(100vw - 24px));max-height:264px;overflow:auto;z-index:16;
-    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;backdrop-filter:blur(10px)}
+  .ptlist{position:fixed;left:12px;right:12px;bottom:12px;max-height:264px;overflow:auto;z-index:16;
+    background:rgba(20,28,40,.66);border:1px solid var(--line);border-radius:12px;padding:10px;backdrop-filter:blur(10px)}
+  .ptlist #ptrows{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))!important}
   .ptlist .pthd{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between}
   .ptlist #ptrows{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
   .ptlist .ptrow{display:flex;align-items:center;gap:6px;padding:6px 7px;border-radius:8px;cursor:pointer;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08)}
@@ -142,7 +144,7 @@
   body.viewer .topbar{top:46px}
   /* 분류 범례 (좌측 중앙) */
   .catlegend{position:fixed;left:12px;top:50%;transform:translateY(-50%);z-index:14;min-width:150px;max-width:340px;max-height:64vh;overflow:auto;
-    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;backdrop-filter:blur(10px);display:none}
+    background:rgba(20,28,40,.66);border:1px solid var(--line);border-radius:12px;padding:10px;backdrop-filter:blur(10px);display:none}
   .catlegend .cl-hd{font-size:11px;font-weight:800;color:var(--muted);margin-bottom:7px}
   .catlegend .cl-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:700;margin-bottom:2px}
   .catlegend .cl-row:hover{background:rgba(255,255,255,.07)}
@@ -220,10 +222,11 @@
     <button data-t="labels" class="on">구역명</button>
     <button data-t="dims">치수</button>
   </div>
-  <button class="btn" id="addBtn">📍 체크 추가</button>
-  <button class="btn" id="opBtn">💬 의견</button>
-  <button class="btn" id="galBtn">🖼 사진 보기</button>
-  <button class="btn" id="linkBtn">🔗 링크 생성</button>
+  <button class="btn tb" id="addBtn">📍 체크</button>
+  <button class="btn tb" id="opBtn">💬 의견</button>
+  <button class="btn tb" id="galBtn">🖼 사진</button>
+  <button class="btn tb" id="xlsBtn">📊 엑셀</button>
+  <button class="btn tb" id="linkBtn">🔗 링크</button>
 </div>
 
 <div class="pop" id="pop"></div>
@@ -977,6 +980,29 @@ document.getElementById('galBtn').onclick=()=>{
   PINS.filter(p=>activeCat===null||(p.category||'')===activeCat).forEach(p=>{const d=dn.get(p.id);(p.photos||[]).forEach(src=>{all.push(src);metas.push({cat:p.category,title:p.title,memo:p.memo,chk:d?d.num:''});});});
   if(!all.length){alert(activeCat?`‘${activeCat}’ 분류에 등록된 사진이 없습니다.`:'등록된 사진이 없습니다. 체크·의견에 사진을 넣어보세요.');return;}
   openLightbox(all,0,metas);};
+
+// ---- 엑셀 저장 (HTML 표를 .xls로) — 이미지 포함 ----
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br/>');}
+document.getElementById('xlsBtn').onclick=()=>{
+  const proj=activeProj(); const projName=proj?proj.name:'프로젝트';
+  const dn=computeNumbers();
+  const rows=PINS.filter(p=>isCheck(p)&&(activeCat===null||(p.category||'')===activeCat));
+  if(!rows.length){alert('저장할 체크포인트가 없습니다.');return;}
+  rows.sort((a,b)=>{const da=dn.get(a.id),db=dn.get(b.id);return (da.catOrder-db.catOrder)||(da.seq-db.seq);});
+  const today=new Date();const dstr=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  let html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"/><style>table{border-collapse:collapse;font-family:"맑은 고딕",Arial}th,td{border:1px solid #888;padding:6px;vertical-align:top;font-size:12px}th{background:#e8eef7;font-weight:700}h2{margin:6px 0}h4{margin:2px 0 10px;color:#555;font-weight:400}img{max-width:200px;max-height:150px;margin:2px}</style></head><body>';
+  html+=`<h2>${esc(projName)}</h2><h4>저장일: ${dstr} · 총 ${rows.length}건${activeCat?` · 분류: ${esc(activeCat)}`:''}</h4>`;
+  html+='<table><thead><tr><th style="width:60px">체크번호</th><th style="width:140px">분류</th><th style="width:140px">위치/구역</th><th style="width:280px">내용</th><th style="width:340px">사진</th></tr></thead><tbody>';
+  rows.forEach(p=>{const d=dn.get(p.id);
+    const imgs=(p.photos||[]).map(src=>`<img src="${src}"/>`).join('');
+    html+=`<tr><td align="center"><b>${esc(d.num)}</b></td><td>${esc(p.category||'')}</td><td>${esc(p.title||'')}</td><td>${esc(p.memo||'')}</td><td>${imgs}</td></tr>`;
+  });
+  html+='</tbody></table></body></html>';
+  const blob=new Blob(['﻿'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`${projName}_체크포인트_${dstr}.xls`;
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+};
 
 apply();
 
