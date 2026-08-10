@@ -1154,6 +1154,7 @@ function hidePop(){pop.style.display='none';}
 // ---- detail panel ----
 const panel=document.getElementById('panel');let curPin=null;
 function openPanel(pin){curPin=pin;
+  document.getElementById('ptlist').classList.remove('collapsed');   // 포인트를 누르면 하단 목록도 함께 펼쳐짐(기존 동작)
   const kind=document.getElementById('pKind'); const disp=computeNumbers(); const d=disp.get(pin.id);
   if(pin.type==='opinion'){
     let sub='새 위치 의견';
