@@ -962,25 +962,26 @@ function renderCatLegend(){
   const counts={}; PINS.forEach(p=>{const c=p.category||'';if(c)counts[c]=(counts[c]||0)+1;});
   let h='<div class="cl-hd">분류</div>';
   h+=`<div class="cl-row${activeCat===null?' on':''}" data-c=""><span class="cl-all">전체</span><span class="cl-n">${PINS.length}</span></div>`;
-  cats.forEach((c,i)=>{h+=`<div class="cl-row${activeCat===c?' on':''}" data-c="${c}" draggable="true" data-idx="${i}"><span class="cl-sw" style="background:${catColor(c)}"></span><span class="cl-t">${c}</span><span class="cl-n">${counts[c]||0}</span><span class="cl-acts"><button data-edit="${c}" title="수정">✏️</button><button data-del="${c}" title="삭제">🗑</button></span></div>`;});
-  h+='<button class="cl-add" id="clAdd">＋ 분류 추가</button>';
+  cats.forEach((c,i)=>{h+=`<div class="cl-row${activeCat===c?' on':''}" data-c="${c}"${IS_VIEWER?'':` draggable="true" data-idx="${i}"`}><span class="cl-sw" style="background:${catColor(c)}"></span><span class="cl-t">${c}</span><span class="cl-n">${counts[c]||0}</span>${IS_VIEWER?'':`<span class="cl-acts"><button data-edit="${c}" title="수정">✏️</button><button data-del="${c}" title="삭제">🗑</button></span>`}</div>`;});
+  if(!IS_VIEWER) h+='<button class="cl-add" id="clAdd">＋ 분류 추가</button>';
   el.innerHTML=h;
   el.querySelectorAll('.cl-row').forEach(r=>{r.onclick=e=>{if(e.target.closest('.cl-acts'))return;const c=r.getAttribute('data-c');activeCat=(c===''?null:c);
     const ptl=document.getElementById('ptlist');
     if(activeCat){ptl.style.display='';ptl.classList.remove('collapsed');const floors=new Set(PINS.filter(p=>(p.category||'')===activeCat).map(p=>p.floor));const arr=[...floors];const target=arr.length===1?arr[0]:'all';setFloorUI(target);frameFloor(target);apply();}
-    else{ptl.style.display='none';renderPins();}
+    else{ptl.style.display='none';setFloorUI('all');frameFloor('all');apply();}
   };});
-  el.querySelectorAll('[data-edit]').forEach(b=>{b.onclick=async e=>{e.stopPropagation();const old=b.getAttribute('data-edit');const n=await modalPrompt('분류 이름 수정',old);if(n&&n.trim()){renameCat(old,n.trim());renderCatLegend();renderPins();}};});
-  el.querySelectorAll('[data-del]').forEach(b=>{b.onclick=async e=>{e.stopPropagation();const c=b.getAttribute('data-del');if(await modalConfirm(`'${c}' 분류 삭제`,'해당 분류의 체크포인트는 분류 없음으로 변경됩니다.')){removeCat(c);renderCatLegend();renderPins();}};});
-  const ab=el.querySelector('#clAdd'); if(ab)ab.onclick=async()=>{const n=await modalPrompt('새 분류 이름 (예: 외부누수)');if(n&&n.trim()){addCat(n.trim());renderCatLegend();}};
-  // 드래그 앤 드롭 순서 변경
-  let dragIdx=null;
-  el.querySelectorAll('.cl-row[draggable]').forEach(r=>{
-    r.ondragstart=e=>{dragIdx=+r.dataset.idx;r.classList.add('dragging');e.dataTransfer.effectAllowed='move';};
-    r.ondragend=()=>{r.classList.remove('dragging');el.querySelectorAll('.cl-row').forEach(x=>x.classList.remove('drag-over'));};
-    r.ondragover=e=>{e.preventDefault();e.dataTransfer.dropEffect='move';el.querySelectorAll('.cl-row').forEach(x=>x.classList.remove('drag-over'));r.classList.add('drag-over');};
-    r.ondrop=e=>{e.preventDefault();const toIdx=+r.dataset.idx;if(dragIdx!==null&&dragIdx!==toIdx){moveCat(dragIdx,toIdx);renderCatLegend();renderPins();}dragIdx=null;};
-  });
+  if(!IS_VIEWER){
+    el.querySelectorAll('[data-edit]').forEach(b=>{b.onclick=async e=>{e.stopPropagation();const old=b.getAttribute('data-edit');const n=await modalPrompt('분류 이름 수정',old);if(n&&n.trim()){renameCat(old,n.trim());renderCatLegend();renderPins();}};});
+    el.querySelectorAll('[data-del]').forEach(b=>{b.onclick=async e=>{e.stopPropagation();const c=b.getAttribute('data-del');if(await modalConfirm(`'${c}' 분류 삭제`,'해당 분류의 체크포인트는 분류 없음으로 변경됩니다.')){removeCat(c);renderCatLegend();renderPins();}};});
+    const ab=el.querySelector('#clAdd'); if(ab)ab.onclick=async()=>{const n=await modalPrompt('새 분류 이름 (예: 외부누수)');if(n&&n.trim()){addCat(n.trim());renderCatLegend();}};
+    let dragIdx=null;
+    el.querySelectorAll('.cl-row[draggable]').forEach(r=>{
+      r.ondragstart=e=>{dragIdx=+r.dataset.idx;r.classList.add('dragging');e.dataTransfer.effectAllowed='move';};
+      r.ondragend=()=>{r.classList.remove('dragging');el.querySelectorAll('.cl-row').forEach(x=>x.classList.remove('drag-over'));};
+      r.ondragover=e=>{e.preventDefault();e.dataTransfer.dropEffect='move';el.querySelectorAll('.cl-row').forEach(x=>x.classList.remove('drag-over'));r.classList.add('drag-over');};
+      r.ondrop=e=>{e.preventDefault();const toIdx=+r.dataset.idx;if(dragIdx!==null&&dragIdx!==toIdx){moveCat(dragIdx,toIdx);renderCatLegend();renderPins();}dragIdx=null;};
+    });
+  }
 }
 
 function refreshProjSel(){const s=document.getElementById('projSel');s.innerHTML=PROJ.list.map(p=>`<option value="${p.id}" ${p.id===PROJ.active?'selected':''}>${p.name}</option>`).join('');}
