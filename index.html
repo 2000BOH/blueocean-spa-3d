@@ -175,11 +175,7 @@
   .lb .lb-grp b{font-size:11px;color:var(--muted);margin-right:4px;white-space:nowrap}
   .lb .lb-save .btn{background:transparent;border:1px solid var(--line);padding:5px 10px;font-size:11px}
   /* 클라우드 상태 배지 */
-  .cloudbadge{position:fixed;right:12px;bottom:12px;z-index:40;font-size:11px;font-weight:700;padding:6px 11px;
-    border-radius:9px;border:1px solid var(--line);background:rgba(20,28,40,.8);backdrop-filter:blur(8px);color:var(--muted);pointer-events:none}
-  .cloudbadge.ok{color:#7ee6ac;border-color:rgba(37,194,116,.45)}
-  .cloudbadge.sync{color:#8fc4ff;border-color:rgba(47,125,209,.5)}
-  .cloudbadge.err{color:#ff9a9a;border-color:rgba(200,80,80,.5)}
+  .cloudbadge{display:none}
   /* 열람 전용 표시 */
   #pView{display:none}
   #pView .ro-item{margin-bottom:11px}
@@ -249,7 +245,7 @@
     <button data-view="top">평면</button>
   </div>
   <div class="toggle" id="toggles">
-    <button data-t="labels" class="on">구역명</button>
+    <button data-t="labels" class="on">구역</button>
     <button data-t="dims">치수</button>
   </div>
   <button class="btn tb" id="addBtn">📍 체크</button>
@@ -266,7 +262,7 @@
 <div class="catlegend" id="catlegend"></div>
 
 <!-- 체크 포인트 목록 (우측 상단) — 기본은 접힌 상태, 헤더를 누르면 펼쳐짐 -->
-<div class="ptlist collapsed" id="ptlist">
+<div class="ptlist collapsed" id="ptlist" style="display:none">
   <div class="pthd" id="pthd"><span><i class="pt-chev">▸</i> 📍 목록</span><span id="ptcount">0</span></div>
   <div id="ptrows"><div class="ptempty">‘📍 체크 추가’로 포인트를 만들면 여기에 번호·위치가 표시됩니다. 눌러서 상세를 봅니다.</div></div>
 </div>
@@ -964,15 +960,15 @@ function renderCatLegend(){
   if(!cats.length && IS_VIEWER){el.style.display='none';return;}
   el.style.display='block';
   const counts={}; PINS.forEach(p=>{const c=p.category||'';if(c)counts[c]=(counts[c]||0)+1;});
-  let h='<div class="cl-hd">분류 (누르면 필터, 드래그로 순서 변경)</div>';
+  let h='<div class="cl-hd">분류</div>';
   h+=`<div class="cl-row${activeCat===null?' on':''}" data-c=""><span class="cl-all">전체</span><span class="cl-n">${PINS.length}</span></div>`;
   cats.forEach((c,i)=>{h+=`<div class="cl-row${activeCat===c?' on':''}" data-c="${c}" draggable="true" data-idx="${i}"><span class="cl-sw" style="background:${catColor(c)}"></span><span class="cl-t">${c}</span><span class="cl-n">${counts[c]||0}</span><span class="cl-acts"><button data-edit="${c}" title="수정">✏️</button><button data-del="${c}" title="삭제">🗑</button></span></div>`;});
   h+='<button class="cl-add" id="clAdd">＋ 분류 추가</button>';
   el.innerHTML=h;
   el.querySelectorAll('.cl-row').forEach(r=>{r.onclick=e=>{if(e.target.closest('.cl-acts'))return;const c=r.getAttribute('data-c');activeCat=(c===''?null:c);
-    // 해당 분류가 있는 층만 자동 표시
-    if(activeCat){const floors=new Set(PINS.filter(p=>(p.category||'')===activeCat).map(p=>p.floor));const arr=[...floors];const target=arr.length===1?arr[0]:'all';setFloorUI(target);frameFloor(target);apply();}
-    else{renderPins();}
+    const ptl=document.getElementById('ptlist');
+    if(activeCat){ptl.style.display='';ptl.classList.remove('collapsed');const floors=new Set(PINS.filter(p=>(p.category||'')===activeCat).map(p=>p.floor));const arr=[...floors];const target=arr.length===1?arr[0]:'all';setFloorUI(target);frameFloor(target);apply();}
+    else{ptl.style.display='none';renderPins();}
   };});
   el.querySelectorAll('[data-edit]').forEach(b=>{b.onclick=async e=>{e.stopPropagation();const old=b.getAttribute('data-edit');const n=await modalPrompt('분류 이름 수정',old);if(n&&n.trim()){renameCat(old,n.trim());renderCatLegend();renderPins();}};});
   el.querySelectorAll('[data-del]').forEach(b=>{b.onclick=async e=>{e.stopPropagation();const c=b.getAttribute('data-del');if(await modalConfirm(`'${c}' 분류 삭제`,'해당 분류의 체크포인트는 분류 없음으로 변경됩니다.')){removeCat(c);renderCatLegend();renderPins();}};});
@@ -1154,7 +1150,9 @@ function hidePop(){pop.style.display='none';}
 // ---- detail panel ----
 const panel=document.getElementById('panel');let curPin=null;
 function openPanel(pin){curPin=pin;
-  document.getElementById('ptlist').classList.remove('collapsed');   // 포인트를 누르면 하단 목록도 함께 펼쳐짐(기존 동작)
+  const ptl=document.getElementById('ptlist');
+  if(pin.category){activeCat=pin.category;renderCatLegend();}
+  if(activeCat!==null){ptl.style.display='';ptl.classList.remove('collapsed');}
   const kind=document.getElementById('pKind'); const disp=computeNumbers(); const d=disp.get(pin.id);
   if(pin.type==='opinion'){
     let sub='새 위치 의견';
@@ -1341,7 +1339,7 @@ document.getElementById('recoverBtn').onclick=async()=>{
 document.getElementById('recoverClose').onclick=()=>document.getElementById('recoverBg').classList.remove('show');
 document.getElementById('recoverBg').onclick=e=>{if(e.target.id==='recoverBg')e.currentTarget.classList.remove('show');};
 
-document.getElementById('pthd').onclick=()=>document.getElementById('ptlist').classList.toggle('collapsed');
+document.getElementById('pthd').onclick=()=>{const ptl=document.getElementById('ptlist');if(activeCat===null){ptl.style.display='none';return;}ptl.classList.toggle('collapsed');};
 
 apply();
 bootStorage();   // ☁ 로컬 사진 로드 → 클라우드 동기화
