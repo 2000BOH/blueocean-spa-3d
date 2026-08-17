@@ -11,6 +11,6 @@
  * 최초 1회 SUPABASE_SETUP.md 의 SQL 을 실행해야 합니다.
  */
 window.SPA_CONFIG = {
-  SUPABASE_URL: "https://pbtfmzqpyytnpivrsjca.supabase.co",
-  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBidGZtenFweXl0bnBpdnJzamNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1NTAzNjYsImV4cCI6MjA5OTEyNjM2Nn0.W5g0o2sL9tLW8-xHtHcUFGxx5HFpyeyxRdBn2ehyarQ"
+  SUPABASE_URL: "https://jnoahfqplptdyuivcybz.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impub2FoZnFwbHB0ZHl1aXZjeWJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3NDc1MDYsImV4cCI6MjEwMTMyMzUwNn0.GWWLbbQa42aEYD69mPwFAgofp-RnHzgS_BXi1CD8g7Y"
 };
